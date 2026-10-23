@@ -15,7 +15,8 @@ It is one app for phone and desktop: an installable, offline-first Progressive W
 | **Activities** | Your own goals with weekly hours, block lengths, preferred time, priority, colour and fixed weekly slots. |
 | **Insights** | Fatigue score 0–100 with its drivers and advice, a two-week trend, how each day is spent, free time by time of day, goal progress, work hours vs. logged, and a matrix of every shift changeover. |
 | **Assistant** | An offline rules engine. Ask "how tired am I?", "when can I study?", or say "set friday night office", "log 2h freelance", "add guitar 3h per week evening". Changes are shown first and applied only when you tap Apply. |
-| **Privacy & security** | No accounts, no servers, no trackers. Optional PIN lock with attempt throttling. Encrypted backups (AES-256-GCM). Strict Content Security Policy. |
+| **WhatsApp alerts** | Your own reminder rules (shift start, time to leave, forgot to clock out, bedtime, activity start, daily brief, fatigue warnings, custom), delivered to WhatsApp by a free scheduled GitHub Action. See [docs/WHATSAPP_ALERTS.md](docs/WHATSAPP_ALERTS.md). |
+| **Privacy & security** | No accounts and no trackers. Everything stays on the device except the encrypted alert schedule, if you turn alerts on. Optional PIN lock with attempt throttling. Encrypted backups (AES-256-GCM). Strict Content Security Policy. |
 
 ## Quick start
 

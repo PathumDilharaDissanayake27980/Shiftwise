@@ -4,7 +4,9 @@ import { starterActivities } from '../domain/defaults';
 import { repo } from '../data/repo';
 import { Icon, ToastProvider } from './components/common';
 import { AppDataProvider, useAppData } from './data';
+import { AlertAutoSync } from './alerts';
 import { ActivitiesScreen } from './screens/Activities';
+import { AlertsScreen } from './screens/Alerts';
 import { AssistantScreen } from './screens/Assistant';
 import { InsightsScreen } from './screens/Insights';
 import { LogScreen } from './screens/Log';
@@ -20,6 +22,7 @@ const ROUTES = [
   { id: 'insights', label: 'Insights', icon: 'insights', mobile: true },
   { id: 'assistant', label: 'Assistant', icon: 'assistant', mobile: true },
   { id: 'activities', label: 'Activities', icon: 'activities', mobile: false },
+  { id: 'alerts', label: 'Alerts', icon: 'bell', mobile: false },
   { id: 'settings', label: 'Settings', icon: 'settings', mobile: false },
 ] as const;
 type Route = (typeof ROUTES)[number]['id'];
@@ -132,6 +135,9 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
           <a href="#activities" className={cx('btn btn-icon btn-ghost', route === 'activities' && 'is-on')} aria-label="Activities">
             <Icon name="activities" />
           </a>
+          <a href="#alerts" className={cx('btn btn-icon btn-ghost', route === 'alerts' && 'is-on')} aria-label="Alerts">
+            <Icon name="bell" />
+          </a>
           <a href="#settings" className={cx('btn btn-icon btn-ghost', route === 'settings' && 'is-on')} aria-label="Settings">
             <Icon name="settings" />
           </a>
@@ -144,6 +150,7 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
         {route === 'insights' && <InsightsScreen weekStartDate={week} setWeek={setViewWeek} />}
         {route === 'assistant' && <AssistantScreen />}
         {route === 'activities' && <ActivitiesScreen />}
+        {route === 'alerts' && <AlertsScreen />}
         {route === 'settings' && <SettingsScreen />}
       </main>
       <nav className="tabs" aria-label="Main">
@@ -156,6 +163,7 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
         ))}
       </nav>
       {import.meta.env.VITE_DEMO ? null : <UpdateBanner />}
+      <AlertAutoSync />
     </div>
   );
 }

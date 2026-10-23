@@ -1,0 +1,42 @@
+# Sends ShiftWise alerts to WhatsApp. Setup: docs/WHATSAPP_ALERTS.md
+# Needs three repository secrets: CALLMEBOT_PHONE, CALLMEBOT_APIKEY, ALERTS_KEY.
+name: WhatsApp alerts
+
+on:
+  schedule:
+    # Every 10 minutes. GitHub may start scheduled runs several minutes late at busy times.
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Send a test message instead of the schedule'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: whatsapp-alerts
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Send due alerts
+        run: node scripts/send-alerts.mjs
+        env:
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+          ALERTS_KEY: ${{ secrets.ALERTS_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SEND_TEST: ${{ inputs.test }}

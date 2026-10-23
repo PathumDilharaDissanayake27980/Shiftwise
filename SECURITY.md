@@ -2,7 +2,17 @@
 
 ## Data model
 
-ShiftWise has no backend. Roster, activities, time logs and settings are stored in the browser's IndexedDB on the user's device. Nothing is sent over the network after the app has loaded: the Content Security Policy sets `connect-src 'self'` and the app makes no API calls.
+ShiftWise has no backend. Roster, activities, time logs and settings are stored in the browser's IndexedDB on the user's device. Nothing leaves the device unless you turn on WhatsApp alerts (below). The Content Security Policy only allows network requests to the app itself and to `api.github.com`.
+
+### WhatsApp alerts (optional)
+
+When alerts are switched on, the app sends one thing off the device: the next 7 days of alert times and texts. They go to the `alerts` branch of the user's own GitHub repository, encrypted with AES-256-GCM using `ALERTS_KEY`. That key is also stored as an Actions secret. The scheduled workflow decrypts the schedule and calls CallMeBot over HTTPS.
+
+- The GitHub token is stored only in the app's IndexedDB and is never included in backups. Use a fine-grained token limited to one repository, with Contents and Actions permissions and an expiry.
+- `sent.json` stores salted SHA-256 hashes of alert ids, not the alerts themselves.
+- Workflow logs print counts only, because logs on public repositories are public.
+- CSP `connect-src` allows `https://api.github.com` and nothing else.
+- Residual risk: anyone with access to the unlocked device can read the token. Revoke it on GitHub if the device is lost.
 
 ## Controls
 

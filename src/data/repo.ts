@@ -1,9 +1,22 @@
 import type { ZodError } from 'zod';
+import { type AlertRule, defaultAlertRules } from '../domain/alerts';
 import { DEFAULT_SETTINGS, defaultRosterDay, newId } from '../domain/defaults';
 import type { Activity, ISODate, RosterDay, Settings, TimeLog } from '../domain/types';
-import { type Backup, BACKUP_FORMAT, BACKUP_VERSION, activitySchema, backupSchema, firstIssue, rosterDaySchema, settingsSchema, timeLogSchema } from './schemas';
+import { type Backup, BACKUP_FORMAT, BACKUP_VERSION, activitySchema, alertConfigSchema, alertRulesSchema, backupSchema, firstIssue, rosterDaySchema, settingsSchema, timeLogSchema } from './schemas';
 import { type PinRecord, type Sealed, hashPin, open, seal, verifyPin } from './crypto';
 import { type ShiftWiseDB, db as defaultDb } from './db';
+
+export interface AlertConfig {
+  repo: string;
+  token: string;
+  key: string;
+  branch: string;
+  autoSync: boolean;
+  lastSyncAt: number | null;
+  lastHash: string | null;
+  lastCount: number | null;
+  lastError: string | null;
+}
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -132,6 +145,31 @@ export class Repo {
     }
   }
 
+  // ---- alerts --------------------------------------------------------------------------------
+  async getAlertRules(): Promise<AlertRule[]> {
+    const rec = await this.db.kv.get('alertRules');
+    if (!rec) return defaultAlertRules();
+    const r = alertRulesSchema.safeParse(rec.value);
+    return r.success ? (r.data as AlertRule[]) : defaultAlertRules();
+  }
+
+  async saveAlertRules(rules: AlertRule[]): Promise<void> {
+    await this.db.kv.put({ key: 'alertRules', value: check(alertRulesSchema, rules) });
+  }
+
+  async getAlertConfig(): Promise<AlertConfig | null> {
+    const r = alertConfigSchema.safeParse((await this.db.kv.get('alertConfig'))?.value);
+    return r.success ? (r.data as AlertConfig) : null;
+  }
+
+  async saveAlertConfig(c: AlertConfig): Promise<void> {
+    await this.db.kv.put({ key: 'alertConfig', value: check(alertConfigSchema, c) });
+  }
+
+  async clearAlertConfig(): Promise<void> {
+    await this.db.kv.delete('alertConfig');
+  }
+
   // ---- app lock --------------------------------------------------------------------------------
   async getLock(): Promise<PinRecord | null> {
     const v = (await this.db.kv.get('lock'))?.value as PinRecord | undefined;
@@ -176,6 +214,7 @@ export class Repo {
         roster: await this.db.roster.toArray(),
         activities: await this.db.activities.toArray(),
         logs: (await this.db.logs.toArray()).filter((l) => l.end !== null),
+        alertRules: await this.getAlertRules(),
       },
     };
     const json = JSON.stringify(backup);
@@ -206,13 +245,14 @@ export class Repo {
       parsed = JSON.parse(await open((parsed as { sealed: Sealed }).sealed, passphrase));
     }
     const backup = check(backupSchema, parsed) as Backup;
-    const { settings, roster, activities, logs } = backup.data;
+    const { settings, roster, activities, logs, alertRules } = backup.data;
     await this.db.transaction('rw', [this.db.roster, this.db.activities, this.db.logs, this.db.kv], async () => {
       await Promise.all([this.db.roster.clear(), this.db.activities.clear(), this.db.logs.clear()]);
       await this.db.kv.put({ key: 'settings', value: settings });
       await this.db.roster.bulkPut(roster as RosterDay[]);
       await this.db.activities.bulkPut(activities as Activity[]);
       await this.db.logs.bulkPut(logs as TimeLog[]);
+      if (alertRules) await this.db.kv.put({ key: 'alertRules', value: alertRules });
     });
     return { roster: roster.length, activities: activities.length, logs: logs.length };
   }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isISODate } from '../domain/time';
+import { ALERT_TRIGGERS } from '../domain/alerts';
 import { ACTIVITY_COLORS, ACTIVITY_KINDS, DAY_CODES, LOG_CATEGORIES, TIME_PREFS, WORK_MODES, WORK_SHIFTS } from '../domain/types';
 
 /**
@@ -80,6 +81,34 @@ export const settingsSchema = z.object({
   hour12: z.boolean(),
 });
 
+export const alertRuleSchema = z.object({
+  id: z.string().uuid(),
+  name: text(60).min(1, 'Give the alert a name'),
+  enabled: z.boolean(),
+  trigger: z.enum(ALERT_TRIGGERS),
+  offsetMin: z.number().int().min(-24 * 60).max(24 * 60),
+  time: minuteOfDay.max(1439),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+  shifts: z.array(z.enum(WORK_SHIFTS)).max(4),
+  activityId: z.string().max(40),
+  minScore: z.number().int().min(0).max(100),
+  message: z.string().max(1000).refine((m) => m.trim().length > 0, 'Write a message'),
+});
+
+export const alertRulesSchema = z.array(alertRuleSchema).max(50);
+
+export const alertConfigSchema = z.object({
+  repo: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/, 'Use the form owner/repository'),
+  token: z.string().regex(/^(github_pat_|ghp_)[A-Za-z0-9_]{20,255}$/, 'That does not look like a GitHub token'),
+  key: z.string().min(24).max(128),
+  branch: z.string().regex(/^[A-Za-z0-9._/-]{1,60}$/),
+  autoSync: z.boolean(),
+  lastSyncAt: z.number().nullable(),
+  lastHash: z.string().max(128).nullable(),
+  lastCount: z.number().int().min(0).nullable(),
+  lastError: z.string().max(500).nullable(),
+});
+
 export const BACKUP_FORMAT = 'shiftwise-backup';
 export const BACKUP_VERSION = 1;
 
@@ -92,6 +121,7 @@ export const backupSchema = z.object({
     roster: z.array(rosterDaySchema).max(5000),
     activities: z.array(activitySchema).max(200),
     logs: z.array(timeLogSchema).max(50_000),
+    alertRules: alertRulesSchema.optional(),
   }),
 });
 
