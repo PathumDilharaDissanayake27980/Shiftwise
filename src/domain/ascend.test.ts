@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ascendAppLink, ascendWebLink, buildHandoff, decodePayload, encodePayload, reportToLogs, type Report } from './ascend';
+import { ascendAppLink, ascendLinks, ascendWebLink, buildHandoff, decodePayload, encodePayload, reportToLogs, type Report } from './ascend';
 import { DEFAULT_SETTINGS, balancedActivities } from './defaults';
 import { dayLoad, planDays, type RosterLookup } from './planner';
 import { atMinutes, datesFrom } from './time';
-import type { DayCode, RosterDay } from './types';
+import type { Activity, DayCode, RosterDay } from './types';
 import { ascendReportSchema } from '../data/schemas';
 
 const MON = '2026-10-26';
@@ -12,6 +12,18 @@ const rosterOf = (codes: DayCode[]): RosterLookup => {
   const dates = datesFrom(MON, codes.length);
   return (d) => ({ date: d, code: codes[dates.indexOf(d)] ?? 'OFF', mode: 'H' }) as RosterDay;
 };
+
+/** The activities ShiftWise 1.0 and 1.1 created on first run (no links). */
+function starterV1(): Activity[] {
+  const base = { active: true, fixed: [], createdAt: 0, preferred: 'any' as const };
+  return [
+    { ...base, id: 'a1', name: 'Study', kind: 'focus', color: 'teal', weeklyTargetMin: 480, minBlockMin: 60, maxBlockMin: 120, priority: 5 },
+    { ...base, id: 'a2', name: 'Freelance work', kind: 'focus', color: 'blue', weeklyTargetMin: 480, minBlockMin: 60, maxBlockMin: 150, priority: 4 },
+    { ...base, id: 'a3', name: 'Gym', kind: 'fitness', color: 'coral', weeklyTargetMin: 300, minBlockMin: 75, maxBlockMin: 75, priority: 4 },
+    { ...base, id: 'a4', name: 'Personal project', kind: 'focus', color: 'violet', weeklyTargetMin: 240, minBlockMin: 45, maxBlockMin: 120, priority: 3 },
+    { ...base, id: 'a5', name: 'Reading', kind: 'light', color: 'amber', weeklyTargetMin: 180, minBlockMin: 30, maxBlockMin: 60, priority: 2 },
+  ];
+}
 
 describe('balanced week', () => {
   const activities = balancedActivities(0);
@@ -72,6 +84,17 @@ describe('Ascend link', () => {
     expect(ascendAppLink(h)).toMatch(/^intent:\/\/import\?sw=[A-Za-z0-9_-]+#Intent;scheme=ascend;package=com\.eliteswe\.roadmap;S\.browser_fallback_url=https%3A/);
     expect(encodePayload({ t: 'Café — ✓' })).not.toMatch(/[+/=]/);
     expect(decodePayload(encodePayload({ t: 'Café — ✓' }))).toEqual({ t: 'Café — ✓' });
+  });
+
+  it('infers links for activities made before 1.2, so old data still reaches Ascend', () => {
+    const old = starterV1();
+    const links = ascendLinks(old);
+    expect(old.filter((a) => links.has(a.id)).map((a) => [a.name, links.get(a.id)])).toEqual([['Study', 'learn'], ['Personal project', 'build']]);
+    const h = buildHandoff(planDays(datesFrom(MON, 7), roster, S, old), old, MON, 1);
+    expect(h.days.flatMap((d) => d.b).length).toBeGreaterThan(0);
+    expect(h.week.learn).toBe(480);
+    const withExplicit = [...old, { ...old[0]!, id: 'x', name: 'AWS exam', link: 'cert' as const }];
+    expect([...ascendLinks(withExplicit).values()]).toEqual(['cert']);
   });
 
   it('turns completed Ascend sessions into log entries', () => {

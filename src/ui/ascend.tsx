@@ -35,12 +35,20 @@ export function AscendCard() {
   const href = useAscendLink();
   const todayBlocks = h.days[0]?.b ?? [];
   const total = h.days.slice(0, 7).reduce((t, d) => t + d.b.reduce((s, b) => s + b[1], 0), 0);
+  const nothingLinked = h.days.every((d) => d.b.length === 0);
   return (
     <div className="card ascend-card">
       <h3>
         <span className="ascend-mark" aria-hidden="true" /> Career growth in Ascend
       </h3>
-      {todayBlocks.length ? (
+      {nothingLinked ? (
+        <div className="note note-warn">
+          <strong>Nothing is going to Ascend yet</strong>
+          <span>
+            No study activity is linked to Ascend. Open <a href="#activities">Activities</a> and tap <b>Balanced week</b>, or edit your study activity and set <b>Sends to Ascend as</b>.
+          </span>
+        </div>
+      ) : todayBlocks.length ? (
         <div className="ascend-blocks" aria-label="Today's study blocks">
           {todayBlocks.map(([st, m, k]) => (
             <span key={st}>

@@ -50,10 +50,38 @@ export interface Report {
   items: ReportItem[];
 }
 
+/** Guesses the Ascend part from an activity's name, for activities made before links existed. */
+export function inferLink(a: Activity): AscendLink | null {
+  if (a.kind !== 'focus') return null;
+  const n = a.name.toLowerCase();
+  if (/cert|exam|aws|azure|comptia|security\+|gh-?\d/.test(n)) return 'cert';
+  if (/project|portfolio|build|side ?hustle|\bapps?\b/.test(n)) return 'build';
+  if (/stud|learn|course|lesson|roadmap|ascend|tutorial|class/.test(n)) return 'learn';
+  return null;
+}
+
+/**
+ * Which activities feed Ascend. Explicit links win; if no activity has one (data from ShiftWise 1.0/1.1),
+ * links are inferred from the names so study still reaches Ascend.
+ */
+export function ascendLinks(activities: Activity[]): Map<string, AscendLink> {
+  const explicit = activities.filter((a) => a.link);
+  if (explicit.length) return new Map(explicit.map((a) => [a.id, a.link as AscendLink]));
+  const out = new Map<string, AscendLink>();
+  for (const a of activities) {
+    const k = inferLink(a);
+    if (k) out.set(a.id, k);
+  }
+  return out;
+}
+
 export function buildHandoff(plans: DayPlan[], activities: Activity[], from: ISODate, now: number): Handoff {
-  const linkOf = new Map(activities.filter((a) => a.link).map((a) => [a.id, a.link as AscendLink]));
+  const linkOf = ascendLinks(activities);
   const week: Record<AscendLink, number> = { learn: 0, build: 0, cert: 0 };
-  for (const a of activities) if (a.active && a.link) week[a.link] += a.weeklyTargetMin;
+  for (const a of activities) {
+    const k = linkOf.get(a.id);
+    if (a.active && k) week[k] += a.weeklyTargetMin;
+  }
   const days = plans
     .filter((p) => p.date >= from)
     .slice(0, HANDOFF_DAYS)
@@ -104,7 +132,8 @@ export type ReportLog = Omit<TimeLog, 'id' | 'createdAt'>;
 
 /** Turns completed Ascend sessions into activity log entries for the matching ShiftWise activities. */
 export function reportToLogs(report: Report, activities: Activity[]): { logs: ReportLog[]; unmatched: number } {
-  const pick = (k: AscendLink) => activities.find((a) => a.link === k && a.active) ?? activities.find((a) => a.link === k);
+  const linkOf = ascendLinks(activities);
+  const pick = (k: AscendLink) => activities.find((a) => linkOf.get(a.id) === k && a.active) ?? activities.find((a) => linkOf.get(a.id) === k);
   const logs: ReportLog[] = [];
   let unmatched = 0;
   for (const it of report.items) {
