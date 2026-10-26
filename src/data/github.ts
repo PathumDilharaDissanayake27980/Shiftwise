@@ -4,12 +4,12 @@ import type { AlertConfig } from './repo';
 
 /**
  * Publishes the encrypted alert schedule to a branch of the user's GitHub repository, where the
- * scheduled "WhatsApp alerts" workflow reads it. Only alert times and texts leave the device, and
+ * scheduled "Phone alerts" workflow reads it. Only alert times and texts leave the device, and
  * they are encrypted with a key that also lives in the repository's Actions secrets.
  */
 
 export const ALERTS_FILE = 'alerts.enc.json';
-export const ALERTS_WORKFLOW = 'whatsapp-alerts.yml';
+export const ALERTS_WORKFLOW = 'phone-alerts.yml';
 export const ALERTS_FORMAT = 'shiftwise-alerts';
 
 export class GitHubError extends Error {

@@ -60,6 +60,13 @@ export interface Settings {
   /** Wake-up time after the recovery sleep following a graveyard shift. */
   graveyardRecoveryUntil: number;
   preNightNap: boolean;
+  /**
+   * Most minutes of focus work (study, building, freelance) planned on each kind of day, so goals are
+   * spread across the week instead of piling onto the first free evenings. Leave and holidays use OFF.
+   */
+  focusBudget: { M: number; D: number; N: number; G: number; OFF: number };
+  /** The second of two days off in a row is a recharge day: fitness, light and personal time only. */
+  restDay: boolean;
   weekStartsOn: 0 | 1;
   hour12: boolean;
 }
@@ -69,6 +76,10 @@ export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
 export const TIME_PREFS = ['morning', 'afternoon', 'evening', 'any'] as const;
 export type TimePref = (typeof TIME_PREFS)[number];
+
+/** Which part of the Ascend study plan an activity's blocks feed (see domain/ascend.ts). */
+export const ASCEND_LINKS = ['learn', 'build', 'cert'] as const;
+export type AscendLink = (typeof ASCEND_LINKS)[number];
 
 export const ACTIVITY_COLORS = ['teal', 'blue', 'violet', 'coral', 'amber', 'green', 'rose', 'slate'] as const;
 export type ActivityColor = (typeof ACTIVITY_COLORS)[number];
@@ -93,6 +104,8 @@ export interface Activity {
   priority: number;
   active: boolean;
   fixed: FixedSlot[];
+  /** Blocks of this activity are sent to Ascend as lessons, project work or exam prep. */
+  link?: AscendLink;
   createdAt: number;
 }
 

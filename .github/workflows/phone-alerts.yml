@@ -1,6 +1,8 @@
-# Sends ShiftWise alerts to WhatsApp. Setup: docs/WHATSAPP_ALERTS.md
-# Needs three repository secrets: CALLMEBOT_PHONE, CALLMEBOT_APIKEY, ALERTS_KEY.
-name: WhatsApp alerts
+# Sends ShiftWise alerts to your phone. Setup: docs/PHONE_ALERTS.md
+# Secrets: ALERTS_KEY, plus at least one channel:
+#   NTFY_TOPIC (recommended, free ntfy app)  ·  TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID  ·  CALLMEBOT_PHONE + CALLMEBOT_APIKEY
+# With no channel set up the run ends quietly instead of failing.
+name: Phone alerts
 
 on:
   schedule:
@@ -17,7 +19,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: whatsapp-alerts
+  group: phone-alerts
   cancel-in-progress: false
 
 jobs:
@@ -35,6 +37,11 @@ jobs:
       - name: Send due alerts
         run: node scripts/send-alerts.mjs
         env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
           CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
           ALERTS_KEY: ${{ secrets.ALERTS_KEY }}

@@ -91,4 +91,38 @@ describe('repo', () => {
     await expect(repo.importBackup('{"format":"shiftwise-backup","version":1}')).rejects.toBeInstanceOf(ValidationError);
     await expect(repo.importBackup('not json')).rejects.toThrow(/not a ShiftWise backup/);
   });
+
+  it('keeps settings saved by 1.1 (before focus budgets existed)', async () => {
+    const old: Partial<typeof DEFAULT_SETTINGS> = { ...DEFAULT_SETTINGS, commuteMin: 50 };
+    delete old.focusBudget;
+    delete old.restDay;
+    await repo['db'].kv.put({ key: 'settings', value: old });
+    const s = await repo.getSettings();
+    expect(s.commuteMin).toBe(50);
+    expect(s.focusBudget).toEqual(DEFAULT_SETTINGS.focusBudget);
+  });
+
+  it('switches to the balanced plan without losing old activities', async () => {
+    const [study] = starterActivities(Date.now());
+    await repo.saveActivity({ ...study!, name: 'Old study', link: undefined } as never);
+    await repo.saveActivity({ ...study!, id: undefined, name: 'Gym', weeklyTargetMin: 600, fixed: [{ weekday: 2, start: 1080, end: 1140 }] } as never);
+    const r = await repo.applyBalancedPlan();
+    expect(r).toEqual({ added: 6, updated: 1, paused: 1 });
+    const all = await repo.listActivities();
+    expect(all.find((a) => a.name === 'Old study')?.active).toBe(false);
+    const gym = all.find((a) => a.name === 'Gym');
+    expect(gym?.weeklyTargetMin).toBe(180);
+    expect(gym?.fixed).toHaveLength(1);
+    expect(all.filter((a) => a.link)).toHaveLength(3);
+  });
+
+  it('imports Ascend sessions once', async () => {
+    const [learn] = starterActivities(Date.now());
+    const a = await repo.saveActivity(learn!);
+    const start = Date.now() - 3_600_000;
+    const logs = [{ category: 'activity' as const, activityId: a.id, start, end: start + 45 * 60_000, note: 'Ascend: x' }];
+    expect(await repo.importSessions(logs)).toEqual({ added: 1, skipped: 0 });
+    expect(await repo.importSessions(logs)).toEqual({ added: 0, skipped: 1 });
+  });
 });
+

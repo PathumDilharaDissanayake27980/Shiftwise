@@ -2,11 +2,11 @@
 
 ## Data model
 
-ShiftWise has no backend. Roster, activities, time logs and settings are stored in the browser's IndexedDB on the user's device. Nothing leaves the device unless you turn on WhatsApp alerts (below). The Content Security Policy only allows network requests to the app itself and to `api.github.com`.
+ShiftWise has no backend. Roster, activities, time logs and settings are stored in the browser's IndexedDB on the user's device. Nothing leaves the device unless you turn on phone alerts (below). Links to and from Ascend carry study times and lesson titles in the URL fragment (after `#`), which browsers never send to a server. Incoming Ascend data is schema-validated and saved only after you confirm. The Content Security Policy only allows network requests to the app itself and to `api.github.com`.
 
-### WhatsApp alerts (optional)
+### Phone alerts (optional)
 
-When alerts are switched on, the app sends one thing off the device: the next 7 days of alert times and texts. They go to the `alerts` branch of the user's own GitHub repository, encrypted with AES-256-GCM using `ALERTS_KEY`. That key is also stored as an Actions secret. The scheduled workflow decrypts the schedule and calls CallMeBot over HTTPS.
+When alerts are switched on, the app sends one thing off the device: the next 7 days of alert times and texts. They go to the `alerts` branch of the user's own GitHub repository, encrypted with AES-256-GCM using `ALERTS_KEY`. That key is also stored as an Actions secret. The scheduled workflow decrypts the schedule and sends due messages over HTTPS to the channels you configured: ntfy (`NTFY_TOPIC`; treat the topic name like a password), Telegram, or CallMeBot.
 
 - The GitHub token is stored only in the app's IndexedDB and is never included in backups. Use a fine-grained token limited to one repository, with Contents and Actions permissions and an expiry.
 - `sent.json` stores salted SHA-256 hashes of alert ids, not the alerts themselves.

@@ -112,6 +112,7 @@ export function buildFixed(date: ISODate, roster: RosterLookup, s: Settings, act
     const label = `${s.shifts[today.code as 'M'].name} shift${win.end > MIN_PER_DAY ? ` (ends ${fmtTime(win.end - MIN_PER_DAY, s.hour12)})` : ''}`;
     add(start, win.end, 'shift', label, { shift: today.code as 'M' });
     if (win.end + commute <= MIN_PER_DAY && commute) add(win.end, win.end + commute, 'commute', 'Commute home');
+    if (today.code === 'M' || today.code === 'D') add(win.end + commute, win.end + commute + 30, 'break', 'Unwind after work');
     if (today.code === 'G') {
       const after = win.end + commute;
       add(after, after + 30, 'meal', 'Light breakfast');
@@ -199,6 +200,41 @@ export interface AllocationState {
   progress: Map<string, number>;
 }
 
+/** How much goal work a day can carry. */
+export interface DayLoad {
+  /** Most focus minutes to plan today. */
+  focus: number;
+  /** A recharge day: no focus work at all. */
+  rest: boolean;
+  /** Focus budget from today to the end of the planned stretch, today included. Used for pacing. */
+  focusAhead: number;
+  /** Days from today to the end of the planned stretch, today included. */
+  daysAhead: number;
+}
+
+const OPEN_LOAD: DayLoad = { focus: Infinity, rest: false, focusAhead: 0, daysAhead: 1 };
+
+function isOff(day: RosterDay): boolean {
+  return !isWorkShift(day.code);
+}
+
+/** Today's focus budget, and whether it is a recharge day (every second day off in a row). */
+export function dayLoad(date: ISODate, roster: RosterLookup, s: Settings): Pick<DayLoad, 'focus' | 'rest'> {
+  const day = roster(date);
+  if (day.code === 'SICK') return { focus: 0, rest: true };
+  if (isWorkShift(day.code)) return { focus: s.focusBudget[day.code], rest: false };
+  let run = 1;
+  while (run <= 14 && isOff(roster(addDays(date, -run)))) run += 1;
+  // A long break with no shifts (leave, or a roster not filled in yet) rests on Sundays only.
+  const rest = s.restDay && (run > 14 ? weekday(date) === 0 : run % 2 === 0);
+  return { focus: rest ? 0 : s.focusBudget.OFF, rest };
+}
+
+const roundUp15 = (m: number) => Math.ceil(m / 15) * 15;
+
+/** Share of a day's open time that may be planned. The rest always stays free time. */
+export const MAX_PLANNED_SHARE = 0.6;
+
 /** Fills the free gaps of a day with goal-driven activity blocks; whatever is left becomes free time. */
 export function allocate(
   fixed: PlanBlock[],
@@ -207,6 +243,7 @@ export function allocate(
   activities: Activity[],
   state: AllocationState,
   sleepBeforeMin: number,
+  load: DayLoad = OPEN_LOAD,
 ): { blocks: PlanBlock[]; notes: PlanNote[] } {
   const blocks = [...fixed];
   const notes: PlanNote[] = [];
@@ -214,6 +251,23 @@ export function allocate(
   if (tired && day.code !== 'SICK') {
     notes.push({ level: 'warn', title: 'Running on low sleep', text: `About ${(sleepBeforeMin / 60).toFixed(1)}h of sleep before today, so the plan has one focus block and no workout.` });
   }
+  if (load.rest && day.code !== 'SICK') {
+    notes.push({ level: 'good', title: 'Recharge day', text: 'Second day off in a row: no study or work goals today. Exercise, people, hobbies and rest only.' });
+  }
+  let focusLeft = load.focus;
+  const openMin = gapsOf(fixed).reduce((t, g) => t + g.end - g.start, 0);
+  let plannedLeft = Math.floor((openMin * MAX_PLANNED_SHARE) / 15) * 15;
+  // Today's fair share of each goal, so the week's work is spread by how much room each day has.
+  const todayCap = new Map<string, number>();
+  for (const a of activities) {
+    const remaining = a.weeklyTargetMin - (state.progress.get(a.id) ?? 0);
+    if (remaining <= 0) continue;
+    let share: number;
+    if (a.kind === 'focus') share = load.focusAhead > 0 && Number.isFinite(load.focus) ? (remaining * load.focus) / load.focusAhead : remaining;
+    else share = remaining / Math.max(1, load.daysAhead);
+    todayCap.set(a.id, Math.max(a.minBlockMin, roundUp15(share * 1.3)));
+  }
+  const perDayMin = new Map<string, number>();
   const perDay = new Map<string, number>();
   let focusBlocks = 0;
   let fitnessDone = false;
@@ -228,8 +282,11 @@ export function allocate(
         if (!a.active || a.weeklyTargetMin <= 0) continue;
         const done = state.progress.get(a.id) ?? 0;
         const remaining = a.weeklyTargetMin - done;
-        if (remaining < 15) continue;
+        if (remaining < Math.min(30, a.minBlockMin)) continue;
         if ((perDay.get(a.id) ?? 0) >= 2) continue;
+        const capLeft = (todayCap.get(a.id) ?? 0) - (perDayMin.get(a.id) ?? 0);
+        if (capLeft < 15) continue;
+        if (a.kind === 'focus' && (load.rest || focusLeft < 15)) continue;
         const heavy = a.kind === 'focus' || a.kind === 'fitness';
         if (late && heavy) continue;
         if (day.code === 'SICK' && heavy) continue;
@@ -237,10 +294,10 @@ export function allocate(
         if (a.kind === 'focus' && tired && focusBlocks >= 1) continue;
         let room = gap.end - cursor;
         if (heavy) room = Math.min(room, s.lateCutoff - cursor);
-        let len = Math.min(a.maxBlockMin, remaining, room);
+        let len = Math.min(a.maxBlockMin, remaining, room, capLeft, plannedLeft, a.kind === 'focus' ? focusLeft : Infinity);
         len = Math.floor(len / 15) * 15;
-        const need = Math.min(a.minBlockMin, remaining);
-        if (len < Math.max(15, need)) continue;
+        const need = Math.min(a.minBlockMin, remaining, plannedLeft, a.kind === 'focus' ? focusLeft : Infinity);
+        if (len < Math.max(30, need)) continue;
         const score =
           a.priority *
           (0.4 + remaining / a.weeklyTargetMin) *
@@ -254,7 +311,12 @@ export function allocate(
       blocks.push({ start: cursor, end: cursor + len, type: 'activity', label: a.name, activityId: a.id });
       state.progress.set(a.id, (state.progress.get(a.id) ?? 0) + len);
       perDay.set(a.id, (perDay.get(a.id) ?? 0) + 1);
-      if (a.kind === 'focus') focusBlocks += 1;
+      perDayMin.set(a.id, (perDayMin.get(a.id) ?? 0) + len);
+      plannedLeft -= len;
+      if (a.kind === 'focus') {
+        focusBlocks += 1;
+        focusLeft -= len;
+      }
       if (a.kind === 'fitness') fitnessDone = true;
       prime = false;
       cursor += len;
@@ -283,13 +345,16 @@ export function planDays(dates: ISODate[], roster: RosterLookup, s: Settings, ac
   const fixedByDate = dates.map((d) => buildFixed(d, roster, s, activities));
   for (const f of fixedByDate) for (const [id, m] of f.fixedActivityMin) state.progress.set(id, (state.progress.get(id) ?? 0) + m);
 
+  const loads = dates.map((d) => dayLoad(d, roster, s));
   const first = dates[0];
   let prevTrailing = first ? trailingSleep(buildFixed(addDays(first, -1), roster, s, []).blocks) : 0;
   return dates.map((date, i) => {
     const f = fixedByDate[i] as FixedResult;
     const day = roster(date);
     const sleepBeforeMin = prevTrailing + morningSleep(f.blocks);
-    const { blocks, notes } = allocate(f.blocks, day, s, activities, state, sleepBeforeMin);
+    const ahead = loads.slice(i);
+    const load: DayLoad = { ...(loads[i] as DayLoad), focusAhead: ahead.reduce((t, l) => t + l.focus, 0), daysAhead: ahead.length };
+    const { blocks, notes } = allocate(f.blocks, day, s, activities, state, sleepBeforeMin, load);
     prevTrailing = trailingSleep(blocks);
     return {
       date,

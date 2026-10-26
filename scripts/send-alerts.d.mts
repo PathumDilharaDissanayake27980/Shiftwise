@@ -9,4 +9,9 @@ export function hashId(id: string, salt: string): string;
 export function dueAlerts<T extends ScheduledAlert>(alerts: T[], sent: Record<string, number>, now: number, windowMs: number): T[];
 export function chunk(texts: string[], maxLen?: number): string[];
 export function pruneSent(sent: Record<string, number>, now: number, keepMs?: number): Record<string, number>;
+export interface Channel {
+  name: string;
+  send: (text: string) => Promise<void>;
+}
+export function channelsFrom(env: Record<string, string | undefined>): Channel[];
 export function main(now?: number): Promise<void>;

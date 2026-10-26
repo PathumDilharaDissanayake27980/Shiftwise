@@ -21,6 +21,8 @@ export const DEFAULT_SETTINGS: Settings = {
   graveyardPreSleepMin: 420,
   graveyardRecoveryUntil: 13 * 60,
   preNightNap: true,
+  focusBudget: { M: 120, D: 105, N: 150, G: 0, OFF: 270 },
+  restDay: true,
   weekStartsOn: 1,
   hour12: true,
 };
@@ -62,14 +64,25 @@ export function newId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** Starter activities that match "a mix" of study, freelance, gym and personal projects. */
-export function starterActivities(now = Date.now()): Activity[] {
+/**
+ * A balanced week around rotating shifts: about 10 hours of career growth (learning, portfolio
+ * building, certification prep, in the 30/70 learn-build ratio of the career guide), some paid side
+ * work, exercise, reading and protected time with people. Everything else stays free time.
+ */
+export function balancedActivities(now = Date.now()): Activity[] {
   const base = { active: true, fixed: [], createdAt: now };
   return [
-    { ...base, id: newId(), name: 'Study', kind: 'focus', color: 'teal', weeklyTargetMin: 8 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'morning', priority: 5 },
-    { ...base, id: newId(), name: 'Freelance work', kind: 'focus', color: 'blue', weeklyTargetMin: 8 * 60, minBlockMin: 60, maxBlockMin: 150, preferred: 'any', priority: 4 },
-    { ...base, id: newId(), name: 'Gym', kind: 'fitness', color: 'coral', weeklyTargetMin: 4 * 75, minBlockMin: 75, maxBlockMin: 75, preferred: 'afternoon', priority: 4 },
-    { ...base, id: newId(), name: 'Personal project', kind: 'focus', color: 'violet', weeklyTargetMin: 4 * 60, minBlockMin: 45, maxBlockMin: 120, preferred: 'any', priority: 3 },
-    { ...base, id: newId(), name: 'Reading', kind: 'light', color: 'amber', weeklyTargetMin: 3 * 60, minBlockMin: 30, maxBlockMin: 60, preferred: 'evening', priority: 2 },
+    { ...base, id: newId(), name: 'Learn (Ascend lessons)', kind: 'focus', color: 'teal', weeklyTargetMin: 4 * 60, minBlockMin: 45, maxBlockMin: 90, preferred: 'morning', priority: 5, link: 'learn' },
+    { ...base, id: newId(), name: 'Build portfolio project', kind: 'focus', color: 'violet', weeklyTargetMin: 4 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 4, link: 'build' },
+    { ...base, id: newId(), name: 'Certification prep', kind: 'focus', color: 'blue', weeklyTargetMin: 90, minBlockMin: 45, maxBlockMin: 60, preferred: 'afternoon', priority: 4, link: 'cert' },
+    { ...base, id: newId(), name: 'Freelance work', kind: 'focus', color: 'amber', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 3 },
+    { ...base, id: newId(), name: 'Gym', kind: 'fitness', color: 'coral', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 60, preferred: 'afternoon', priority: 4 },
+    { ...base, id: newId(), name: 'Reading', kind: 'light', color: 'green', weeklyTargetMin: 90, minBlockMin: 30, maxBlockMin: 45, preferred: 'evening', priority: 2 },
+    { ...base, id: newId(), name: 'Family & friends', kind: 'personal', color: 'rose', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'evening', priority: 3 },
   ];
+}
+
+/** Starter activities for a new install. */
+export function starterActivities(now = Date.now()): Activity[] {
+  return balancedActivities(now);
 }

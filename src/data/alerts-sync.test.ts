@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chunk, dueAlerts, hashId, main, openSealed, pruneSent } from '../../scripts/send-alerts.mjs';
+import { channelsFrom, chunk, dueAlerts, hashId, main, openSealed, pruneSent } from '../../scripts/send-alerts.mjs';
 import { ALERTS_FILE, GitHubClient, newAlertsKey, syncAlerts } from './github';
 import type { AlertConfig } from './repo';
 
@@ -8,7 +8,7 @@ const cfg: AlertConfig = {
   autoSync: true, lastSyncAt: null, lastHash: null, lastCount: null, lastError: null,
 };
 
-/** A tiny in-memory GitHub + CallMeBot used by both the app's sync and the Actions sender. */
+/** A tiny in-memory GitHub + ntfy + Telegram + CallMeBot used by both the app's sync and the Actions sender. */
 function fakeServices() {
   const files = new Map<string, { sha: string; content: string }>();
   const branches = new Set(['main']);
@@ -18,6 +18,14 @@ function fakeServices() {
   const handler = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? 'GET';
+    if (url.hostname === 'ntfy.test') {
+      sent.push(String(init?.body ?? ''));
+      return new Response('{}', { status: 200 });
+    }
+    if (url.hostname === 'telegram.test') {
+      sent.push(JSON.parse(String(init?.body)).text);
+      return new Response('{"ok":true}', { status: 200 });
+    }
     if (url.hostname === 'callmebot.test') {
       sent.push(url.searchParams.get('text') ?? '');
       return new Response('Message queued', { status: 200 });
@@ -91,9 +99,8 @@ describe('app sync → Actions sender (end to end)', () => {
     await expect(openSealed(doc.sealed, 'wrong key wrong key wrong')).rejects.toThrow(/ALERTS_KEY/);
 
     vi.stubGlobal('fetch', svc.handler);
-    vi.stubEnv('CALLMEBOT_URL', 'https://callmebot.test/whatsapp.php');
-    vi.stubEnv('CALLMEBOT_PHONE', '+94770000000');
-    vi.stubEnv('CALLMEBOT_APIKEY', '123456');
+    vi.stubEnv('NTFY_SERVER', 'https://ntfy.test/');
+    vi.stubEnv('NTFY_TOPIC', 'shiftwise-test-topic');
     vi.stubEnv('ALERTS_KEY', cfg.key);
     vi.stubEnv('GITHUB_TOKEN', 't');
     vi.stubEnv('GITHUB_REPOSITORY', 'me/Shiftwise');
@@ -109,5 +116,32 @@ describe('app sync → Actions sender (end to end)', () => {
     vi.stubEnv('SEND_TEST', 'true');
     await main(now);
     expect(svc.sent.at(-1)).toContain('test');
+  }, 30_000);
+});
+
+describe('alert channels', () => {
+  it('uses every configured channel and nothing else', () => {
+    expect(channelsFrom({}).map((c) => c.name)).toEqual([]);
+    expect(channelsFrom({ NTFY_TOPIC: 't', TELEGRAM_BOT_TOKEN: 'b', TELEGRAM_CHAT_ID: '1', CALLMEBOT_PHONE: '+9477', CALLMEBOT_APIKEY: 'k' }).map((c) => c.name)).toEqual(['ntfy', 'Telegram', 'WhatsApp']);
+    expect(channelsFrom({ TELEGRAM_BOT_TOKEN: 'b' })).toHaveLength(0);
+  });
+
+  it('skips quietly when no channel is set up, and still delivers when one channel fails', async () => {
+    const svc = fakeServices();
+    vi.stubGlobal('fetch', svc.handler);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await expect(main()).resolves.toBeUndefined();
+    expect(log.mock.calls.flat().join(' ')).toMatch(/No alert channel/);
+
+    vi.stubEnv('TELEGRAM_API', 'https://telegram.test');
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '123:abc');
+    vi.stubEnv('TELEGRAM_CHAT_ID', '42');
+    vi.stubEnv('CALLMEBOT_URL', 'https://down.test/whatsapp.php');
+    vi.stubEnv('CALLMEBOT_PHONE', '+94770000000');
+    vi.stubEnv('CALLMEBOT_APIKEY', '123456');
+    vi.stubEnv('SEND_TEST', 'true');
+    vi.stubEnv('ALERT_RETRY_MS', '1');
+    await main();
+    expect(svc.sent).toEqual(['✅ ShiftWise test: phone alerts are working.']);
   }, 30_000);
 });

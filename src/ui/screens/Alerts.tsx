@@ -109,7 +109,7 @@ export function AlertsScreen() {
     setBusy('test');
     try {
       await sendTest(config);
-      toast('Test started. The WhatsApp message should arrive within a minute or two.');
+      toast('Test started. The message should reach your phone within a minute or two.');
     } catch (e) {
       toast(errorMessage(e), 'error');
     } finally {
@@ -123,7 +123,7 @@ export function AlertsScreen() {
     <div className="screen">
       <header className="page-head">
         <div>
-          <p className="eyebrow">WhatsApp alerts</p>
+          <p className="eyebrow">Phone alerts</p>
           <h1>Reminders on your phone</h1>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setDraft(blankRule('custom'))}>
@@ -134,7 +134,7 @@ export function AlertsScreen() {
       <div className={cx('card', 'alert-status', config?.lastError ? 'is-error' : config ? 'is-ok' : '')}>
         {config ? (
           <>
-            <h3>{config.lastError ? 'Sync problem' : 'Connected to WhatsApp via GitHub'}</h3>
+            <h3>{config.lastError ? 'Sync problem' : 'Connected to your phone via GitHub'}</h3>
             <p className="muted">
               {config.lastError
                 ? config.lastError
@@ -158,9 +158,9 @@ export function AlertsScreen() {
         ) : (
           <>
             <h3>Not connected yet</h3>
-            <p className="muted">Your alerts are ready below. Connect WhatsApp once (about 10 minutes) and they start arriving.</p>
+            <p className="muted">Your alerts are ready below. Connect your phone once (about 5 minutes, free) and they start arriving.</p>
             <button type="button" className="btn btn-primary" onClick={() => setSetupOpen(true)}>
-              Set up WhatsApp alerts
+              Set up phone alerts
             </button>
           </>
         )}
@@ -366,6 +366,7 @@ function Setup({ config, onDone, onConnected, alertsCount }: { config: AlertConf
   const [repoName, setRepoName] = useState(config?.repo ?? guessRepo());
   const [token, setToken] = useState('');
   const [key] = useState(config?.key ?? newAlertsKey());
+  const [topic] = useState(() => `shiftwise-${newAlertsKey().replace(/[^A-Za-z0-9]/g, '').slice(0, 18).toLowerCase()}`);
   const [autoSync, setAutoSync] = useState(config?.autoSync ?? true);
   const [busy, setBusy] = useState(false);
   const secretsUrl = repoName.includes('/') ? `https://github.com/${repoName}/settings/secrets/actions` : 'https://github.com';
@@ -408,22 +409,26 @@ function Setup({ config, onDone, onConnected, alertsCount }: { config: AlertConf
   };
 
   return (
-    <Section title="Connect WhatsApp">
+    <Section title="Connect your phone">
       <ol className="steps">
         <li>
-          <h3>Get your free CallMeBot key</h3>
+          <h3>Install ntfy and subscribe to your private topic</h3>
           <p>
-            On your phone, save <b className="mono">+34 611 01 16 37</b> as a contact (CallMeBot). In WhatsApp, send it: <b>I allow callmebot to send me messages</b>. It replies with your API key. If the number has changed, check callmebot.com.
+            Install the free <b>ntfy</b> app (<a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noreferrer noopener">Android</a>, <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noreferrer noopener">iPhone</a>). No account is needed. Tap <b>+</b> and subscribe to this topic. Treat it like a password: anyone who knows it can read your alerts.
           </p>
+          <span className="keybox">
+            <span className="mono">{topic}</span>
+            <button type="button" className="btn btn-small" onClick={() => copy(topic)}>Copy</button>
+          </span>
+          <p className="hint">Prefer Telegram? Create a bot with @BotFather and add <code>TELEGRAM_BOT_TOKEN</code> and <code>TELEGRAM_CHAT_ID</code> instead. WhatsApp through CallMeBot (<code>CALLMEBOT_PHONE</code>, <code>CALLMEBOT_APIKEY</code>) still works as an extra channel, but it is often unreliable.</p>
         </li>
         <li>
-          <h3>Add three secrets to your GitHub repository</h3>
+          <h3>Add two secrets to your GitHub repository</h3>
           <p>
             Open <a href={secretsUrl} target="_blank" rel="noreferrer noopener">Settings → Secrets and variables → Actions</a> and add each with <b>New repository secret</b>:
           </p>
           <ul className="secret-list">
-            <li><code>CALLMEBOT_PHONE</code> your WhatsApp number with country code, e.g. <span className="mono">+94771234567</span></li>
-            <li><code>CALLMEBOT_APIKEY</code> the key CallMeBot sent you</li>
+            <li><code>NTFY_TOPIC</code> the topic above</li>
             <li>
               <code>ALERTS_KEY</code> this encryption key:
               <span className="keybox">

@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 /**
- * Sends due ShiftWise alerts to WhatsApp through CallMeBot. Runs on a schedule in GitHub Actions.
+ * Sends due ShiftWise alerts to your phone. Runs on a schedule in GitHub Actions.
+ *
+ * Channels (configure any; every configured one receives each message):
+ *  - ntfy      NTFY_TOPIC (+ optional NTFY_SERVER, NTFY_TOKEN). Free push app, no account. Recommended.
+ *  - Telegram  TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID. Free bot.
+ *  - WhatsApp  CALLMEBOT_PHONE + CALLMEBOT_APIKEY through CallMeBot (unreliable free hobby service).
  *
  * Reads the encrypted schedule the app uploaded to the alerts branch, decrypts it with ALERTS_KEY,
  * sends anything due in the last ALERT_WINDOW_MIN minutes that has not been sent, and records what
@@ -48,7 +53,7 @@ export function dueAlerts(alerts, sent, now, windowMs) {
     .sort((a, b) => a.at - b.at);
 }
 
-/** Joins messages into as few WhatsApp messages as possible, each under maxLen characters. */
+/** Joins messages into as few phone messages as possible, each under maxLen characters. */
 export function chunk(texts, maxLen = 1500) {
   const out = [];
   let cur = '';
@@ -102,26 +107,89 @@ function makeGitHub({ api, repo, token, branch }) {
   };
 }
 
-async function sendWhatsApp(text, { url, phone, apikey }) {
-  const q = new URLSearchParams({ phone, text, apikey });
+async function retry(label, fn) {
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const res = await fetch(`${url}?${q.toString()}`).catch(() => null);
+    const res = await fn().catch(() => null);
     const body = res ? await res.text().catch(() => '') : '';
     if (res && res.ok && !/APIKey is invalid/i.test(body.slice(0, 4000))) return;
-    if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 5000));
-    else throw new Error(`CallMeBot did not accept the message (HTTP ${res ? res.status : 'no response'}). Check CALLMEBOT_PHONE and CALLMEBOT_APIKEY.`);
+    if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * Number(process.env.ALERT_RETRY_MS || 4000)));
+    else throw new Error(`${label} did not accept the message (HTTP ${res ? res.status : 'no response'}).`);
   }
 }
 
+/** Every channel that has its secrets set. Pure, so it can be tested. */
+export function channelsFrom(env) {
+  const out = [];
+  if (env.NTFY_TOPIC) {
+    const server = (env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/+$/, '');
+    out.push({
+      name: 'ntfy',
+      send: (text) =>
+        retry('ntfy', () =>
+          fetch(`${server}/${encodeURIComponent(env.NTFY_TOPIC)}`, {
+            method: 'POST',
+            body: text,
+            headers: { Title: 'ShiftWise', Tags: 'alarm_clock', ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}) },
+          }),
+        ),
+    });
+  }
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+    const api = (env.TELEGRAM_API || 'https://api.telegram.org').replace(/\/+$/, '');
+    out.push({
+      name: 'Telegram',
+      send: (text) =>
+        retry('Telegram', () =>
+          fetch(`${api}/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text, disable_web_page_preview: true }),
+          }),
+        ),
+    });
+  }
+  if (env.CALLMEBOT_PHONE && env.CALLMEBOT_APIKEY) {
+    const url = env.CALLMEBOT_URL || 'https://api.callmebot.com/whatsapp.php';
+    out.push({
+      name: 'WhatsApp',
+      send: (text) => retry('CallMeBot', () => fetch(`${url}?${new URLSearchParams({ phone: env.CALLMEBOT_PHONE, text, apikey: env.CALLMEBOT_APIKEY }).toString()}`)),
+    });
+  }
+  return out;
+}
+
+/** Sends to every channel. Succeeds if at least one channel delivered. */
+async function broadcast(text, channels) {
+  const failed = [];
+  for (const c of channels) {
+    try {
+      await c.send(text);
+    } catch (e) {
+      failed.push(c.name);
+      console.log(`::warning::${e.message}`);
+    }
+  }
+  if (failed.length === channels.length) throw new Error(`No channel delivered the message (${failed.join(', ')}). Check the secrets for those channels.`);
+}
+
 export async function main(now = Date.now()) {
-  const wa = { url: process.env.CALLMEBOT_URL || 'https://api.callmebot.com/whatsapp.php', phone: need('CALLMEBOT_PHONE'), apikey: need('CALLMEBOT_APIKEY') };
+  const channels = channelsFrom(process.env);
+  if (channels.length === 0) {
+    console.log('::notice::No alert channel is set up yet, so nothing was sent. Add NTFY_TOPIC (or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID) as a repository secret. See docs/PHONE_ALERTS.md.');
+    return;
+  }
+  console.log(`Channels: ${channels.map((c) => c.name).join(', ')}.`);
 
   if (process.env.SEND_TEST === 'true') {
-    await sendWhatsApp('✅ ShiftWise test: WhatsApp alerts are working.', wa);
+    await broadcast('✅ ShiftWise test: phone alerts are working.', channels);
     console.log('Test message sent.');
     return;
   }
 
+  if (!process.env.ALERTS_KEY) {
+    console.log('::notice::ALERTS_KEY is not set yet. Copy it from ShiftWise → Alerts → Connection settings.');
+    return;
+  }
   const key = need('ALERTS_KEY');
   const gh = makeGitHub({
     api: process.env.GITHUB_API_URL || 'https://api.github.com',
@@ -153,7 +221,7 @@ export async function main(now = Date.now()) {
 
   for (const [i, msg] of chunk(due.map((a) => a.text)).entries()) {
     if (i > 0) await new Promise((r) => setTimeout(r, 3000));
-    await sendWhatsApp(msg, wa);
+    await broadcast(msg, channels);
   }
   for (const a of due) sent[a._h] = a.at;
   await gh.write(SENT_FILE, JSON.stringify({ sent }), sentFile?.sha, `Sent ${due.length} alert(s)`);

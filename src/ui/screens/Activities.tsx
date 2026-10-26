@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { fmtTime } from '../../domain/time';
-import { ACTIVITY_COLORS, ACTIVITY_KINDS, TIME_PREFS, type Activity, type ActivityKind, type FixedSlot, type TimePref } from '../../domain/types';
+import { ACTIVITY_COLORS, ACTIVITY_KINDS, ASCEND_LINKS, TIME_PREFS, type Activity, type ActivityKind, type AscendLink, type FixedSlot, type TimePref } from '../../domain/types';
 import { repo } from '../../data/repo';
 import { Empty, Icon, Meter, Section, useToast } from '../components/common';
+import { LINK_LABEL } from '../ascend';
 import { useAppData } from '../data';
 import { cx, errorMessage, fromTimeInput, toTimeInput } from '../util';
 
@@ -19,6 +20,7 @@ export function ActivitiesScreen() {
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmBalanced, setConfirmBalanced] = useState(false);
   const stats = week(currentWeek).report.activities;
 
   const save = async (e: FormEvent) => {
@@ -42,6 +44,16 @@ export function ActivitiesScreen() {
     }
   };
 
+  const balanced = async () => {
+    try {
+      const r = await repo.applyBalancedPlan();
+      toast(`Balanced week on: ${r.added} added, ${r.updated} updated${r.paused ? `, ${r.paused} paused (not deleted)` : ''}.`);
+      setConfirmBalanced(false);
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
+  };
+
   const remove = async (id: string) => {
     await repo.deleteActivity(id);
     setConfirmDelete(null);
@@ -58,11 +70,33 @@ export function ActivitiesScreen() {
           <p className="eyebrow">Your other work</p>
           <h1>Activities & weekly goals</h1>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setDraft(blank())}>
-          <Icon name="plus" size={16} /> Add activity
-        </button>
+        <span className="row">
+          <button type="button" className="btn" onClick={() => setConfirmBalanced((v) => !v)}>
+            Balanced week
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => setDraft(blank())}>
+            <Icon name="plus" size={16} /> Add activity
+          </button>
+        </span>
       </header>
-      <p className="lede">The planner shares each weekly goal across the free stretches your shifts leave, highest priority first. Fixed slots, like a class, are placed before anything else.</p>
+      <p className="lede">The planner spreads each weekly goal across the free stretches your shifts leave, within each day's focus budget, and always keeps part of every day free. Fixed slots, like a class, are placed before anything else.</p>
+
+      {confirmBalanced ? (
+        <div className="card">
+          <h3>Switch to the balanced week?</h3>
+          <p className="muted">
+            About 10 hours of career growth (4h lessons, 4h portfolio project, 1.5h exam prep, all sent to Ascend), 3h freelance, 3 gym sessions, 1.5h reading and 3h with family and friends. Activities with the same names are updated; any others are paused, not deleted.
+          </p>
+          <div className="row">
+            <button type="button" className="btn btn-primary" onClick={balanced}>
+              Use the balanced week
+            </button>
+            <button type="button" className="btn" onClick={() => setConfirmBalanced(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {draft ? (
         <Section title={draft.id ? `Edit ${draft.name || 'activity'}` : 'New activity'}>
@@ -99,6 +133,25 @@ export function ActivitiesScreen() {
                 {TIME_PREFS.map((p) => (
                   <option key={p} value={p}>
                     {PREF_LABEL[p]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="ac-link">Sends to Ascend as</label>
+              <select
+                id="ac-link"
+                value={draft.link ?? ''}
+                onChange={(e) => {
+                  const next: Draft = { ...draft };
+                  delete next.link;
+                  setDraft(e.target.value ? { ...next, link: e.target.value as AscendLink } : next);
+                }}
+              >
+                <option value="">Not sent</option>
+                {ASCEND_LINKS.map((l) => (
+                  <option key={l} value={l}>
+                    {LINK_LABEL[l]}
                   </option>
                 ))}
               </select>
@@ -173,7 +226,7 @@ export function ActivitiesScreen() {
                 <div className="act-main">
                   <h3>{a.name}</h3>
                   <p className="muted">
-                    {KIND_LABEL[a.kind]} · {(a.weeklyTargetMin / 60).toFixed(1)}h a week · {PREF_LABEL[a.preferred]} · priority {a.priority}
+                    {KIND_LABEL[a.kind]}{a.link ? ` → Ascend ${LINK_LABEL[a.link].toLowerCase()}` : ''} · {(a.weeklyTargetMin / 60).toFixed(1)}h a week · {PREF_LABEL[a.preferred]} · priority {a.priority}
                     {a.fixed.length ? ` · fixed ${a.fixed.map((s) => `${WEEKDAYS[s.weekday]} ${fmtTime(s.start, settings.hour12)}`).join(', ')}` : ''}
                   </p>
                   {st && a.active ? (

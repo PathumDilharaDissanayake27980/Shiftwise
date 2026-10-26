@@ -5,6 +5,7 @@ import { repo } from '../data/repo';
 import { Icon, ToastProvider } from './components/common';
 import { AppDataProvider, useAppData } from './data';
 import { AlertAutoSync } from './alerts';
+import { AscendImport, useAscendLink } from './ascend';
 import { ActivitiesScreen } from './screens/Activities';
 import { AlertsScreen } from './screens/Alerts';
 import { AssistantScreen } from './screens/Assistant';
@@ -107,6 +108,7 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
   const { currentWeek, running } = useAppData();
   const week = viewWeek ?? currentWeek;
   const clocked = running.some((l) => l.category === 'shift');
+  const ascend = useAscendLink();
   return (
     <div className="shell">
       <a href="#main" className="skip">
@@ -124,6 +126,10 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
             {r.id === 'today' && clocked ? <i className="live" aria-label="Clocked in" /> : null}
           </a>
         ))}
+        <a href={ascend} className="nav-item nav-ascend">
+          <Icon name="ascend" />
+          <span>Ascend</span>
+        </a>
         <p className="side-foot">Your data stays on this device.</p>
       </nav>
       <div className="topbar">
@@ -132,6 +138,9 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
           ShiftWise
         </span>
         <span className="topbar-actions">
+          <a href={ascend} className="btn btn-icon btn-ghost" aria-label="Open Ascend">
+            <Icon name="ascend" />
+          </a>
           <a href="#activities" className={cx('btn btn-icon btn-ghost', route === 'activities' && 'is-on')} aria-label="Activities">
             <Icon name="activities" />
           </a>
@@ -144,6 +153,7 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
         </span>
       </div>
       <main id="main" className="main" tabIndex={-1}>
+        <div key={route} className="screen-enter">
         {route === 'today' && <TodayScreen go={go} />}
         {route === 'week' && <WeekScreen key={week} weekStartDate={week} setWeek={setViewWeek} />}
         {route === 'log' && <LogScreen />}
@@ -152,6 +162,7 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
         {route === 'activities' && <ActivitiesScreen />}
         {route === 'alerts' && <AlertsScreen />}
         {route === 'settings' && <SettingsScreen />}
+        </div>
       </main>
       <nav className="tabs" aria-label="Main">
         {ROUTES.filter((r) => r.mobile).map((r) => (
@@ -164,6 +175,7 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
       </nav>
       {import.meta.env.VITE_DEMO ? null : <UpdateBanner />}
       <AlertAutoSync />
+      <AscendImport />
     </div>
   );
 }

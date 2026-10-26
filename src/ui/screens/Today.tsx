@@ -4,6 +4,7 @@ import { MIN_PER_DAY, addDays, fmtDate, fmtDuration, fmtTime, minutesSince, nowM
 import { repo } from '../../data/repo';
 import { DayList } from '../components/Timeline';
 import { Empty, FatigueGauge, Icon, Notes, Section, useToast } from '../components/common';
+import { AscendCard } from '../ascend';
 import { useAppData } from '../data';
 import { cx, errorMessage } from '../util';
 
@@ -121,6 +122,8 @@ export function TodayScreen({ go }: { go: (route: string) => void }) {
           )}
         </div>
       </div>
+
+      <AscendCard />
 
       {todayPlan ? (
         <>

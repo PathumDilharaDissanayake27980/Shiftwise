@@ -172,6 +172,30 @@ export function SettingsScreen() {
             </div>
           </div>
         </Section>
+        <Section title="Balance">
+          <p className="hint">Most focus work (study, projects, freelance) planned on each kind of day. Gym, reading and time with people come on top, and at least 40% of every day's free time always stays free.</p>
+          <div className="form-grid">
+            {(['M', 'D', 'N', 'G', 'OFF'] as const).map((k) => (
+              <NumField
+                key={k}
+                id={`fb-${k}`}
+                label={k === 'OFF' ? 'Focus on a day off' : `Focus on a ${s.shifts[k].name} day`}
+                suffix="hours"
+                value={s.focusBudget[k] / 60}
+                min={0}
+                max={12}
+                step={0.25}
+                onChange={(n) => setS({ ...s, focusBudget: { ...s.focusBudget, [k]: Math.round(n * 60) } })}
+              />
+            ))}
+            <div className="field">
+              <label className="switch">
+                <input type="checkbox" checked={s.restDay} onChange={(e) => setS({ ...s, restDay: e.target.checked })} />
+                <span>Second day off in a row is a recharge day</span>
+              </label>
+            </div>
+          </div>
+        </Section>
         <div className="form-actions sticky-actions">
           <button type="submit" className="btn btn-primary">
             Save settings

@@ -11,7 +11,7 @@ import type { FatigueResult } from './fatigue';
 import type { RosterLookup } from './planner';
 import { shiftWindow } from './schedule';
 import { MIN_PER_DAY, addDays, atMinutes, dayName, fmtDuration, fmtTime, isISODate, minutesSince, nowMinutes, weekStart } from './time';
-import type { Activity, ActivityKind, DayCode, DayPlan, ISODate, RosterDay, Settings, TimeLog, TimePref, WorkMode } from './types';
+import type { Activity, ActivityKind, AscendLink, DayCode, DayPlan, ISODate, RosterDay, Settings, TimeLog, TimePref, WorkMode } from './types';
 
 export type AssistantAction =
   | { type: 'setRoster'; days: RosterDay[] }
@@ -79,9 +79,17 @@ function findActivity(name: string, activities: Activity[]): Activity | null {
     activities.find((a) => a.name.toLowerCase() === n) ??
     activities.find((a) => a.name.toLowerCase().startsWith(n)) ??
     activities.find((a) => a.name.toLowerCase().includes(n) || n.includes(a.name.toLowerCase())) ??
+    activities.find((a) => a.link && LINK_ALIASES[a.link].test(n)) ??
     null
   );
 }
+
+/** Everyday words for the activities that feed Ascend ("log 2h study" finds "Learn (Ascend lessons)"). */
+const LINK_ALIASES: Record<AscendLink, RegExp> = {
+  learn: /^(study|studying|learn|learning|lessons?|ascend|course)$/,
+  build: /^(build|building|project|projects|portfolio|coding)$/,
+  cert: /^(cert|certs|certification|exam|exam prep)$/,
+};
 
 function inferKind(name: string): ActivityKind {
   if (/gym|run|workout|yoga|swim|walk|cycl|sport|cricket|football|exercise/.test(name)) return 'fitness';

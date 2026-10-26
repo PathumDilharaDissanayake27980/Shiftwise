@@ -1,6 +1,7 @@
 import type { ZodError } from 'zod';
 import { type AlertRule, defaultAlertRules } from '../domain/alerts';
-import { DEFAULT_SETTINGS, defaultRosterDay, newId } from '../domain/defaults';
+import type { ReportLog } from '../domain/ascend';
+import { DEFAULT_SETTINGS, balancedActivities, defaultRosterDay, newId } from '../domain/defaults';
 import type { Activity, ISODate, RosterDay, Settings, TimeLog } from '../domain/types';
 import { type Backup, BACKUP_FORMAT, BACKUP_VERSION, activitySchema, alertConfigSchema, alertRulesSchema, backupSchema, firstIssue, rosterDaySchema, settingsSchema, timeLogSchema } from './schemas';
 import { type PinRecord, type Sealed, hashPin, open, seal, verifyPin } from './crypto';
@@ -86,6 +87,54 @@ export class Repo {
     if (dup) throw new ValidationError(`You already have an activity called ${full.name}.`);
     await this.db.activities.put(full);
     return full;
+  }
+
+  /**
+   * Switches to the balanced week: preset activities are added (or updated in place when one with the
+   * same name exists) and every other activity is paused, never deleted, so its history is kept.
+   */
+  async applyBalancedPlan(now = Date.now()): Promise<{ added: number; updated: number; paused: number }> {
+    const preset = balancedActivities(now).map((a) => check(activitySchema, a) as Activity);
+    const r = { added: 0, updated: 0, paused: 0 };
+    await this.db.transaction('rw', this.db.activities, async () => {
+      const existing = await this.db.activities.toArray();
+      const byName = new Map(existing.map((a) => [a.name.toLowerCase(), a]));
+      const keep = new Set<string>();
+      for (const p of preset) {
+        const old = byName.get(p.name.toLowerCase());
+        if (old) {
+          await this.db.activities.put({ ...p, id: old.id, createdAt: old.createdAt, fixed: old.fixed });
+          keep.add(old.id);
+          r.updated += 1;
+        } else {
+          await this.db.activities.put(p);
+          keep.add(p.id);
+          r.added += 1;
+        }
+      }
+      for (const a of existing) {
+        if (keep.has(a.id) || !a.active) continue;
+        await this.db.activities.put({ ...a, active: false });
+        r.paused += 1;
+      }
+    });
+    return r;
+  }
+
+  /** Saves sessions completed in Ascend, skipping any that overlap entries already in the log. */
+  async importSessions(logs: ReportLog[]): Promise<{ added: number; skipped: number }> {
+    let added = 0;
+    let skipped = 0;
+    for (const l of logs) {
+      try {
+        await this.saveLog(l);
+        added += 1;
+      } catch (e) {
+        if (!(e instanceof ValidationError)) throw e;
+        skipped += 1;
+      }
+    }
+    return { added, skipped };
   }
 
   async deleteActivity(id: string): Promise<void> {

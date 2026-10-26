@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { isISODate } from '../domain/time';
 import { ALERT_TRIGGERS } from '../domain/alerts';
-import { ACTIVITY_COLORS, ACTIVITY_KINDS, DAY_CODES, LOG_CATEGORIES, TIME_PREFS, WORK_MODES, WORK_SHIFTS } from '../domain/types';
+import { DEFAULT_SETTINGS } from '../domain/defaults';
+import { ACTIVITY_COLORS, ACTIVITY_KINDS, ASCEND_LINKS, DAY_CODES, LOG_CATEGORIES, TIME_PREFS, WORK_MODES, WORK_SHIFTS } from '../domain/types';
 
 /**
  * Every write to storage and every imported backup passes through these schemas.
@@ -37,6 +38,7 @@ export const activitySchema = z
     priority: z.number().int().min(1).max(5),
     active: z.boolean(),
     fixed: z.array(fixedSlotSchema).max(14),
+    link: z.enum(ASCEND_LINKS).optional(),
     createdAt: epoch,
   })
   .refine((a) => a.maxBlockMin >= a.minBlockMin, { message: 'Longest block must be at least the shortest block', path: ['maxBlockMin'] });
@@ -55,6 +57,8 @@ export const timeLogSchema = z
   .refine((l) => l.end === null || l.end > l.start, { message: 'End must be after start', path: ['end'] })
   .refine((l) => l.end === null || l.end - l.start <= 24 * 3_600_000, { message: 'A single entry cannot be longer than 24 hours', path: ['end'] })
   .refine((l) => l.category !== 'activity' || !!l.activityId, { message: 'Pick an activity', path: ['activityId'] });
+
+const budgetMin = z.number().int().min(0).max(12 * 60);
 
 const shiftDefSchema = z.object({
   code: z.enum(WORK_SHIFTS),
@@ -77,6 +81,11 @@ export const settingsSchema = z.object({
   graveyardPreSleepMin: z.number().int().min(120).max(600),
   graveyardRecoveryUntil: minuteOfDay,
   preNightNap: z.boolean(),
+  // Added in 1.2. Defaults keep settings saved by older versions (and old backups) valid.
+  focusBudget: z
+    .object({ M: budgetMin, D: budgetMin, N: budgetMin, G: budgetMin, OFF: budgetMin })
+    .default(DEFAULT_SETTINGS.focusBudget),
+  restDay: z.boolean().default(DEFAULT_SETTINGS.restDay),
   weekStartsOn: z.union([z.literal(0), z.literal(1)]),
   hour12: z.boolean(),
 });
@@ -107,6 +116,24 @@ export const alertConfigSchema = z.object({
   lastHash: z.string().max(128).nullable(),
   lastCount: z.number().int().min(0).nullable(),
   lastError: z.string().max(500).nullable(),
+});
+
+/** Completed sessions sent back from Ascend in a "#ascend=" link. */
+export const ascendReportSchema = z.object({
+  v: z.literal(1),
+  app: z.literal('ascend'),
+  at: epoch,
+  items: z
+    .array(
+      z.object({
+        d: isoDate,
+        st: z.number().int().min(0).max(2880),
+        m: z.number().int().min(5).max(600),
+        k: z.enum(ASCEND_LINKS),
+        t: z.string().max(200),
+      }),
+    )
+    .max(300),
 });
 
 export const BACKUP_FORMAT = 'shiftwise-backup';

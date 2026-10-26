@@ -25,7 +25,15 @@ domain/   pure functions: planner · schedule · fatigue · analytics · assista
 
    Focus and fitness work stop at the "no heavy work after" time. Fitness is limited to once a day. On short sleep (under 6 hours) the day gets one focus block and no workout. What is left becomes free time.
 
-Weekly targets are shared across the 7 days, so a busy Monday pushes study to Wednesday's long free stretch.
+Weekly targets are shared across the 7 days, and three limits keep the week balanced (`dayLoad`, `allocate`):
+
+- **Focus budget** per kind of day (`settings.focusBudget`: Morning, Day, Night, Graveyard, Off). Leave and holidays count as Off.
+- **Pacing.** Each goal's share today is `remaining × today's budget ÷ budget left this week` (×1.3 slack, at least one block). The week fills evenly instead of piling onto the first free evenings.
+- **Free-time floor.** At most `MAX_PLANNED_SHARE` (60%) of a day's open time is planned. The second day off in a row is a recharge day with no focus work (`settings.restDay`).
+
+## Ascend link
+
+`domain/ascend.ts` builds the handoff: for the next 14 days, each block of an activity with `link: 'learn' | 'build' | 'cert'` becomes `[start, minutes, kind]`. It is base64url JSON in the URL fragment (`…/ascend/#sw=…`), or `intent://import?sw=…` on Android so the installed app opens, falling back to the web version. Ascend sends completed sessions back as `#ascend=…`. `ascendReportSchema` validates them, and `AscendImport` shows a confirm dialog before `repo.importSessions` writes them. Overlapping entries are skipped, so a repeated link adds nothing.
 
 ## Fatigue model
 

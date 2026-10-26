@@ -1,7 +1,7 @@
 {
   "name": "shiftwise",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Offline-first planner for shift workers: roster, time logging, activity planning, fatigue insights and a built-in rules assistant.",
   "type": "module",
   "license": "UNLICENSED",
