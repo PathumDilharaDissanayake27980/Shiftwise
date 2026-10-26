@@ -5,12 +5,15 @@ import { repo } from '../../data/repo';
 import { DayList } from '../components/Timeline';
 import { Empty, FatigueGauge, Icon, Notes, Section, useToast } from '../components/common';
 import { AscendCard } from '../ascend';
+import { lessonIn } from '../../domain/ascend';
+import { useAscendReport } from '../wiring';
 import { useAppData } from '../data';
 import { cx, errorMessage } from '../util';
 
 export function TodayScreen({ go }: { go: (route: string) => void }) {
   const { today, now, settings, roster, todayPlan, todayFatigue, activities, running } = useAppData();
   const toast = useToast();
+  const report = useAscendReport();
   const nowMin = nowMinutes(now);
   const day = roster(today);
   const yesterday = roster(addDays(today, -1));
@@ -129,7 +132,7 @@ export function TodayScreen({ go }: { go: (route: string) => void }) {
         <>
           <Notes notes={todayPlan.notes} />
           <Section title="Today's plan" aside={<button type="button" className="link" onClick={() => go('week')}>Edit roster</button>}>
-            <DayList plan={todayPlan} activities={activities} settings={settings} nowMin={nowMin} />
+            <DayList plan={todayPlan} activities={activities} settings={settings} nowMin={nowMin} lesson={(st, en) => lessonIn(report, today, st, en)} />
           </Section>
         </>
       ) : (

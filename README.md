@@ -2,7 +2,7 @@
 
 Plan your life around rotating shifts. ShiftWise takes your roster (Morning, Day, Night, Graveyard; home or office) and builds a day-by-day plan around it: sleep, meals, commute, and a balanced week of career growth, exercise, people and free time. It logs the hours you actually work, scores fatigue risk, and reports where your free time really is.
 
-It works with **[Ascend](https://pathumdilharadissanayake27980.github.io/ascend/)**, the study-roadmap app: ShiftWise decides *when* you study, Ascend decides *what*. Each app links to the other.
+It is wired to **[Ascend](https://pathumdilharadissanayake27980.github.io/ascend/)**, the study timetable and progress tracker. ShiftWise decides *when* you study and Ascend decides *what*. They sync automatically: live in the same browser, and through your GitHub repo (encrypted) for the Android app and other devices. Each app shows the other's data. See [docs/WIRING.md](docs/WIRING.md).
 
 It is one app for phone and desktop: an installable, offline-first Progressive Web App. All data stays on the device.
 

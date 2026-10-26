@@ -6,6 +6,7 @@ import { Icon, ToastProvider } from './components/common';
 import { AppDataProvider, useAppData } from './data';
 import { AlertAutoSync } from './alerts';
 import { AscendImport, useAscendLink } from './ascend';
+import { Wiring } from './wiring';
 import { ActivitiesScreen } from './screens/Activities';
 import { AlertsScreen } from './screens/Alerts';
 import { AssistantScreen } from './screens/Assistant';
@@ -176,6 +177,7 @@ function Shell({ route, go, viewWeek, setViewWeek }: { route: Route; go: (r: str
       {import.meta.env.VITE_DEMO ? null : <UpdateBanner />}
       <AlertAutoSync />
       <AscendImport />
+      <Wiring />
     </div>
   );
 }

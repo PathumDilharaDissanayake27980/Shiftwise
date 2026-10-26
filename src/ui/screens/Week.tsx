@@ -6,6 +6,8 @@ import { repo } from '../../data/repo';
 import { DayList, WeekGrid } from '../components/Timeline';
 import { Icon, Notes, Section, Stat, useToast } from '../components/common';
 import { useAppData } from '../data';
+import { lessonIn } from '../../domain/ascend';
+import { useAscendReport } from '../wiring';
 import { errorMessage } from '../util';
 
 const QUICK: Record<string, DayCode> = { m: 'M', d: 'D', n: 'N', g: 'G', off: 'OFF', x: 'OFF', l: 'LEAVE', leave: 'LEAVE', s: 'SICK', sick: 'SICK', hol: 'HOLIDAY', holiday: 'HOLIDAY' };
@@ -27,6 +29,7 @@ export function parseQuickFill(text: string, start: string): RosterDay[] | strin
 
 export function WeekScreen({ weekStartDate, setWeek }: { weekStartDate: string; setWeek: (d: string | null) => void }) {
   const { week, settings, activities, today, now, currentWeek } = useAppData();
+  const report = useAscendReport();
   const toast = useToast();
   const bundle = week(weekStartDate);
   const [selected, setSelected] = useState<string>(() => (bundle.plans.some((p) => p.date === today) ? today : weekStartDate));
@@ -136,7 +139,7 @@ export function WeekScreen({ weekStartDate, setWeek }: { weekStartDate: string; 
       {selPlan ? (
         <Section title={fmtDate(selPlan.date)}>
           <div className="split">
-            <DayList plan={selPlan} activities={activities} settings={settings} {...(selPlan.date === today ? { nowMin: nowMinutes(now) } : {})} />
+            <DayList plan={selPlan} activities={activities} settings={settings} lesson={(st, en) => lessonIn(report, selPlan.date, st, en)} {...(selPlan.date === today ? { nowMin: nowMinutes(now) } : {})} />
             <Notes notes={selPlan.notes.length ? selPlan.notes : [{ level: 'good', title: 'No warnings', text: 'Shift changeovers around this day leave enough rest.' }]} />
           </div>
         </Section>

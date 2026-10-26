@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { buildAlerts, type Alert, type AlertRule } from '../domain/alerts';
 import { addDays, atMinutes } from '../domain/time';
+import { lessonIn } from '../domain/ascend';
 import { GitHubClient, syncAlerts } from '../data/github';
 import { repo, type AlertConfig } from '../data/repo';
 import { useAppData } from './data';
@@ -46,6 +47,7 @@ export function useAlerts(): AlertsState {
   const data = useAppData();
   const rules = useLiveQuery(() => repo.getAlertRules(), []);
   const config = useLiveQuery(() => repo.getAlertConfig(), []);
+  const report = useLiveQuery(() => repo.getAscendReport(), []);
   const { week, currentWeek, roster, settings, activities, running, today } = data;
 
   const alerts = useMemo(() => {
@@ -62,8 +64,9 @@ export function useAlerts(): AlertsState {
       fatigue: [...a.fatigue, ...b.fatigue],
       running,
       rules,
+      lessonFor: (d, st, en) => lessonIn(report, d, st, en),
     });
-  }, [rules, week, currentWeek, roster, settings, activities, running, today]);
+  }, [rules, week, currentWeek, roster, settings, activities, running, today, report]);
 
   const syncNow = useCallback((force = true) => runSync(alerts, force), [alerts]);
   return { rules, config, alerts, syncNow };

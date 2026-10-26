@@ -78,6 +78,8 @@ export const PLACEHOLDERS: { key: string; meaning: string }[] = [
   { key: 'tomorrow', meaning: "Tomorrow's shift" },
   { key: 'score', meaning: 'Fatigue score 0–100' },
   { key: 'level', meaning: 'Fatigue level' },
+  { key: 'lesson', meaning: 'Ascend lesson in this block' },
+  { key: 'task', meaning: "The lesson's hands-on task" },
   { key: 'sleep', meaning: 'Hours of sleep before the day' },
   { key: 'plan', meaning: "The day's plan as a list" },
   { key: 'warnings', meaning: "The day's warnings" },
@@ -108,7 +110,7 @@ const DEFAULT_MESSAGES: Record<AlertTrigger, string> = {
   clockOutMissed: '⚠️ You are still clocked in. Your {shift} shift ended at {end}. Open ShiftWise to clock out.',
   wake: '☀️ Wake up. Today: {shift} {start}.',
   bedtime: '🌙 Start winding down. Bed at {bed}. Tomorrow: {tomorrow}.',
-  activityStart: '▶️ {activity} starts at {time}.',
+  activityStart: '▶️ {activity} starts at {time}.\n{task}',
   dailyBrief: '📋 {day}: {shift} {start}\n{plan}\nSleep last night: {sleep}h · Fatigue {score}/100',
   riskWarning: '🛑 Take it easy today. Fatigue {score}/100 ({level}).\n{warnings}',
   custom: '🔔 Reminder',
@@ -124,6 +126,7 @@ export function defaultAlertRules(): AlertRule[] {
     { ...blankRule('bedtime'), name: 'Wind-down', offsetMin: -30 },
     { ...blankRule('dailyBrief'), name: 'Daily brief', offsetMin: 20 },
     { ...blankRule('riskWarning'), name: 'Fatigue or rest warning', offsetMin: 25, minScore: 50 },
+    { ...blankRule('activityStart'), name: 'Study block (Ascend lesson)', offsetMin: -5, enabled: false, message: '📘 In 5 min: {activity}\n⚒ {task}' },
   ];
 }
 
@@ -155,6 +158,8 @@ export interface AlertInput {
   running: TimeLog[];
   rules: AlertRule[];
   horizonDays?: number;
+  /** The Ascend lesson planned in a block, if Ascend has reported it. */
+  lessonFor?: (date: ISODate, start: number, end: number) => { title: string; task: string } | null;
 }
 
 export function buildAlerts(input: AlertInput): Alert[] {
@@ -190,7 +195,10 @@ export function buildAlerts(input: AlertInput): Alert[] {
       sleep: (p.sleepBeforeMin / 60).toFixed(1),
       plan: p.blocks
         .filter((b) => PLAN_TYPES.has(b.type) && !(b.type === 'shift' && b.start === 0 && b.label.includes('yesterday')))
-        .map((b) => `• ${t(b.start)} ${b.label}`)
+        .map((b) => {
+          const l = b.type === 'activity' ? input.lessonFor?.(p.date, b.start, b.end) : null;
+          return `• ${t(b.start)} ${b.label}${l ? `: ${l.title}` : ''}`;
+        })
         .join('\n'),
       warnings: p.notes.filter((n) => n.level === 'bad' || n.level === 'warn').map((n) => `• ${n.title}: ${n.text}`).join('\n'),
     };
@@ -274,7 +282,14 @@ export function buildAlerts(input: AlertInput): Alert[] {
             if (b.type !== 'activity' || !b.activityId) continue;
             if (rule.activityId && b.activityId !== rule.activityId) continue;
             const name = activities.find((a) => a.id === b.activityId)?.name ?? b.label;
-            push(rule, `${p.date}|${b.start}|${b.activityId}`, atMinutes(p.date, b.start + off), { ...vars, activity: name, time: t(b.start) });
+            const l = input.lessonFor?.(p.date, b.start, b.end);
+            push(rule, `${p.date}|${b.start}|${b.activityId}`, atMinutes(p.date, b.start + off), {
+              ...vars,
+              activity: l ? `${name}: ${l.title}` : name,
+              lesson: l?.title ?? '',
+              task: l?.task ?? '',
+              time: t(b.start),
+            });
           }
           break;
         case 'custom':

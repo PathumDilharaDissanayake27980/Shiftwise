@@ -1,9 +1,9 @@
 import type { ZodError } from 'zod';
 import { type AlertRule, defaultAlertRules } from '../domain/alerts';
-import type { ReportLog } from '../domain/ascend';
+import type { AscendProgress, Report, ReportLog } from '../domain/ascend';
 import { DEFAULT_SETTINGS, balancedActivities, defaultRosterDay, newId } from '../domain/defaults';
 import type { Activity, ISODate, RosterDay, Settings, TimeLog } from '../domain/types';
-import { type Backup, BACKUP_FORMAT, BACKUP_VERSION, activitySchema, alertConfigSchema, alertRulesSchema, backupSchema, firstIssue, rosterDaySchema, settingsSchema, timeLogSchema } from './schemas';
+import { type Backup, BACKUP_FORMAT, BACKUP_VERSION, activitySchema, ascendProgressSchema, ascendReportSchema, alertConfigSchema, alertRulesSchema, backupSchema, firstIssue, rosterDaySchema, settingsSchema, timeLogSchema } from './schemas';
 import { type PinRecord, type Sealed, hashPin, open, seal, verifyPin } from './crypto';
 import { type ShiftWiseDB, db as defaultDb } from './db';
 
@@ -119,6 +119,39 @@ export class Repo {
       }
     });
     return r;
+  }
+
+  /** Sessions from Ascend that are not in the log yet (nothing of the same kind overlaps them). */
+  async newSessions(logs: ReportLog[]): Promise<ReportLog[]> {
+    if (!logs.length) return [];
+    const from = Math.min(...logs.map((l) => l.start)) - 86_400_000;
+    const to = Math.max(...logs.map((l) => l.end ?? l.start)) + 86_400_000;
+    const existing = (await this.logsBetween(from, to)).filter((x) => x.category === 'activity');
+    return logs.filter((l) => !existing.some((x) => x.start < (l.end ?? l.start) && (x.end ?? Date.now()) > l.start));
+  }
+
+  /** The latest report from Ascend (progress, upcoming lessons). Older reports never replace newer ones. */
+  async getAscendReport(): Promise<Report | null> {
+    const r = ascendReportSchema.safeParse((await this.db.kv.get('ascendReport'))?.value);
+    return r.success ? (r.data as Report) : null;
+  }
+
+  async saveAscendReport(report: Report): Promise<boolean> {
+    const valid = check(ascendReportSchema, report) as Report;
+    const current = await this.getAscendReport();
+    if (current && current.at >= valid.at) return false;
+    await this.db.kv.put({ key: 'ascendReport', value: valid });
+    if (valid.p) await this.saveAscendProgress(valid.p, valid.at);
+    return true;
+  }
+
+  async getAscendProgress(): Promise<(AscendProgress & { at: number }) | null> {
+    const r = ascendProgressSchema.safeParse((await this.db.kv.get('ascendProgress'))?.value);
+    return r.success ? (r.data as AscendProgress & { at: number }) : null;
+  }
+
+  async saveAscendProgress(p: AscendProgress, at: number): Promise<void> {
+    await this.db.kv.put({ key: 'ascendProgress', value: check(ascendProgressSchema, { ...p, at }) });
   }
 
   /** Saves sessions completed in Ascend, skipping any that overlap entries already in the log. */

@@ -134,7 +134,22 @@ export const ascendReportSchema = z.object({
       }),
     )
     .max(300),
+  p: z
+    .object({
+      month: z.number().min(0).max(200),
+      phase: z.string().max(80),
+      done: z.number().int().min(0).max(100_000),
+      total: z.number().int().min(0).max(100_000),
+      streak: z.number().int().min(0).max(10_000),
+      hours: z.number().min(0).max(100_000),
+      next: z.array(z.tuple([isoDate, z.number().int().min(0).max(2880), z.string().max(200)])).max(5),
+    })
+    .optional(),
+  up: z.array(z.tuple([isoDate, z.number().int().min(0).max(2880), z.number().int().min(5).max(600), z.string().max(200), z.string().max(400)])).max(120).optional(),
 });
+
+/** The last progress snapshot Ascend sent, with when it arrived. */
+export const ascendProgressSchema = ascendReportSchema.shape.p.unwrap().extend({ at: epoch });
 
 export const BACKUP_FORMAT = 'shiftwise-backup';
 export const BACKUP_VERSION = 1;

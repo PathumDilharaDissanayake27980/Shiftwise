@@ -9,8 +9,13 @@
  * Both travel inside the link itself (base64url JSON in the URL fragment), so nothing goes through a
  * server and fragments are never sent over the network.
  */
+import { bedOf, wakeOf } from './alerts';
+import { isWorkShift } from './defaults';
+import type { FatigueResult } from './fatigue';
+import type { RosterLookup } from './planner';
+import { shiftWindow } from './schedule';
 import { atMinutes } from './time';
-import type { Activity, AscendLink, DayCode, DayPlan, ISODate, TimeLog } from './types';
+import type { Activity, AscendLink, DayCode, DayPlan, ISODate, Settings, TimeLog, WorkShift } from './types';
 
 export const ASCEND_URL = 'https://pathumdilharadissanayake27980.github.io/ascend/';
 export const ASCEND_PACKAGE = 'com.eliteswe.roadmap';
@@ -24,6 +29,19 @@ export interface HandoffDay {
   c: DayCode;
   /** [start minute, length in minutes, kind] for each block Ascend should fill. */
   b: [number, number, AscendLink][];
+  /** The day around those blocks, so Ascend can show it: shift [start, end], wake, bedtime, fatigue. */
+  s?: [number, number];
+  w?: number;
+  z?: number;
+  f?: number;
+  fl?: string;
+}
+
+/** What ShiftWise knows about each day besides the plan. */
+export interface HandoffContext {
+  settings: Settings;
+  roster: RosterLookup;
+  fatigue?: FatigueResult[];
 }
 
 export interface Handoff {
@@ -43,11 +61,32 @@ export interface ReportItem {
   t: string;
 }
 
+/** Where you are in the study plan, as Ascend sees it. Shown on ShiftWise's Today screen. */
+export interface AscendProgress {
+  month: number;
+  phase: string;
+  done: number;
+  total: number;
+  streak: number;
+  hours: number;
+  /** Next few lessons: [date, start minute, title]. */
+  next: [ISODate, number, string][];
+}
+
 export interface Report {
   v: 1;
   app: 'ascend';
   at: number;
   items: ReportItem[];
+  p?: AscendProgress;
+  /** Upcoming lessons Ascend has placed in the blocks: [date, start, minutes, title, hands-on task]. */
+  up?: [ISODate, number, number, string, string][];
+}
+
+/** The Ascend lesson planned in a ShiftWise block, if Ascend has told us. */
+export function lessonIn(report: Pick<Report, 'up'> | null | undefined, date: ISODate, start: number, end: number): { title: string; task: string } | null {
+  const hit = report?.up?.find(([d, st]) => d === date && st >= start - 5 && st < end);
+  return hit ? { title: hit[3], task: hit[4] } : null;
 }
 
 /** Guesses the Ascend part from an activity's name, for activities made before links existed. */
@@ -75,7 +114,7 @@ export function ascendLinks(activities: Activity[]): Map<string, AscendLink> {
   return out;
 }
 
-export function buildHandoff(plans: DayPlan[], activities: Activity[], from: ISODate, now: number): Handoff {
+export function buildHandoff(plans: DayPlan[], activities: Activity[], from: ISODate, now: number, ctx?: HandoffContext): Handoff {
   const linkOf = ascendLinks(activities);
   const week: Record<AscendLink, number> = { learn: 0, build: 0, cert: 0 };
   for (const a of activities) {
@@ -85,14 +124,33 @@ export function buildHandoff(plans: DayPlan[], activities: Activity[], from: ISO
   const days = plans
     .filter((p) => p.date >= from)
     .slice(0, HANDOFF_DAYS)
-    .map((p) => ({
-      d: p.date,
-      c: p.code,
-      b: p.blocks.flatMap((bl) => {
-        const k = bl.activityId ? linkOf.get(bl.activityId) : undefined;
-        return k ? [[bl.start, bl.end - bl.start, k] as [number, number, AscendLink]] : [];
-      }),
-    }));
+    .map((p) => {
+      const day: HandoffDay = {
+        d: p.date,
+        c: p.code,
+        b: p.blocks.flatMap((bl) => {
+          const k = bl.activityId ? linkOf.get(bl.activityId) : undefined;
+          return k ? [[bl.start, bl.end - bl.start, k] as [number, number, AscendLink]] : [];
+        }),
+      };
+      if (ctx) {
+        const r = ctx.roster(p.date);
+        if (isWorkShift(r.code)) {
+          const w = shiftWindow(r.code as WorkShift, ctx.settings);
+          day.s = [w.start, w.end];
+        }
+        const wake = wakeOf(p);
+        const bed = bedOf(p);
+        if (wake !== null) day.w = wake;
+        if (bed !== null) day.z = bed;
+        const f = ctx.fatigue?.find((x) => x.date === p.date);
+        if (f) {
+          day.f = f.score;
+          day.fl = f.level;
+        }
+      }
+      return day;
+    });
   return { v: 1, app: 'shiftwise', at: now, week, days };
 }
 

@@ -124,5 +124,19 @@ describe('repo', () => {
     expect(await repo.importSessions(logs)).toEqual({ added: 1, skipped: 0 });
     expect(await repo.importSessions(logs)).toEqual({ added: 0, skipped: 1 });
   });
+
+  it('keeps Ascend progress and recognises sessions already logged', async () => {
+    expect(await repo.getAscendProgress()).toBeNull();
+    const p = { month: 1.4, phase: 'Foundations', done: 12, total: 3323, streak: 3, hours: 9, next: [['2026-10-27', 930, 'Syntax']] as [string, number, string][] };
+    await repo.saveAscendProgress(p, Date.now());
+    expect(await repo.getAscendProgress()).toMatchObject({ phase: 'Foundations', done: 12 });
+    const [learn] = starterActivities(Date.now());
+    const a = await repo.saveActivity(learn!);
+    const start = Date.now() - 7_200_000;
+    const one = { category: 'activity' as const, activityId: a.id, start, end: start + 45 * 60_000 };
+    const two = { ...one, start: start + 3_600_000, end: start + 3_600_000 + 30 * 60_000 };
+    await repo.importSessions([one]);
+    expect(await repo.newSessions([one, two])).toEqual([two]);
+  });
 });
 

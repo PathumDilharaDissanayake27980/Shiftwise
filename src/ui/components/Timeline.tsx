@@ -8,7 +8,20 @@ function colorOf(activities: Activity[], id?: string) {
 }
 
 /** Hour-by-hour list for one day, with a "now" marker when it is today. */
-export function DayList({ plan, activities, settings, nowMin }: { plan: DayPlan; activities: Activity[]; settings: Settings; nowMin?: number }) {
+export function DayList({
+  plan,
+  activities,
+  settings,
+  nowMin,
+  lesson,
+}: {
+  plan: DayPlan;
+  activities: Activity[];
+  settings: Settings;
+  nowMin?: number;
+  /** The Ascend lesson placed in a block, when Ascend has reported it. */
+  lesson?: (start: number, end: number) => { title: string; task: string } | null;
+}) {
   const blocks = plan.blocks.filter((b) => b.type !== 'buffer');
   return (
     <ol className="daylist">
@@ -26,12 +39,23 @@ export function DayList({ plan, activities, settings, nowMin }: { plan: DayPlan;
               {b.label}
               {b.fixed ? <em className="tag">fixed</em> : null}
               {current ? <em className="tag tag-now">now</em> : null}
+              {b.type === 'activity' && lesson ? <LessonLine l={lesson(b.start, b.end)} /> : null}
             </span>
             <span className="dl-dur">{fmtDuration(b.end - b.start)}</span>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+function LessonLine({ l }: { l: { title: string; task: string } | null }) {
+  if (!l) return null;
+  return (
+    <small className="dl-lesson">
+      <b>{l.title}</b>
+      {l.task ? <span> · {l.task}</span> : null}
+    </small>
   );
 }
 

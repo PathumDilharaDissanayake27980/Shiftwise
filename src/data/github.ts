@@ -1,5 +1,5 @@
 import type { Alert } from '../domain/alerts';
-import { randomBytes, seal, toBase64 } from './crypto';
+import { fromBase64, randomBytes, seal, toBase64 } from './crypto';
 import type { AlertConfig } from './repo';
 
 /**
@@ -80,6 +80,17 @@ export class GitHubClient {
     const repo = await this.api<{ default_branch: string }>('');
     const head = await this.api<{ object: { sha: string } }>(`/git/ref/heads/${encodeURIComponent(repo.default_branch)}`);
     await this.api('/git/refs', { method: 'POST', body: JSON.stringify({ ref: `refs/heads/${this.cfg.branch}`, sha: head.object.sha }) });
+  }
+
+  /** A text file from the branch, or null when it does not exist yet. */
+  async getFile(path: string): Promise<string | null> {
+    try {
+      const f = await this.api<{ content: string }>(`/contents/${path}?ref=${encodeURIComponent(this.cfg.branch)}`);
+      return new TextDecoder().decode(fromBase64(f.content.replace(/\s/g, '')));
+    } catch (e) {
+      if (e instanceof GitHubError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   async putFile(path: string, content: string, message: string): Promise<void> {
