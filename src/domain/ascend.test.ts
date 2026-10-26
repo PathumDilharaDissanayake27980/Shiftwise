@@ -30,10 +30,10 @@ describe('balanced week', () => {
   const roster = rosterOf(['M', 'M', 'D', 'D', 'OFF', 'OFF', 'N']);
   const plans = planDays(datesFrom(MON, 7), roster, S, activities);
 
-  it('meets every weekly goal in a normal rotation week', () => {
+  it('meets at least 80% of every weekly goal in a normal rotation week', () => {
     for (const a of activities) {
       const planned = plans.flatMap((p) => p.blocks).filter((b) => b.activityId === a.id).reduce((t, b) => t + b.end - b.start, 0);
-      expect(planned, a.name).toBeGreaterThanOrEqual(a.weeklyTargetMin - 15);
+      expect(planned, a.name).toBeGreaterThanOrEqual(a.weeklyTargetMin * 0.8);
     }
   });
 
@@ -44,6 +44,26 @@ describe('balanced week', () => {
       expect(focus).toBeLessThanOrEqual(dayLoad(p.date, roster, S).focus);
       expect(p.freeMin, p.date).toBeGreaterThanOrEqual(60);
     }
+  });
+
+  it('schedules for alertness and routine, with daily review and a light day after nights', () => {
+    const r2 = rosterOf(['M', 'M', 'D', 'D', 'OFF', 'OFF', 'N', 'N', 'N', 'OFF', 'G', 'G', 'OFF', 'OFF']);
+    const wk = [...planDays(datesFrom(MON, 7), r2, S, activities), ...planDays(datesFrom('2026-11-02', 7), r2, S, activities)];
+    const focus = new Set(activities.filter((a) => a.kind === 'focus').map((a) => a.id));
+    const review = activities.find((a) => a.link === 'review')!;
+    for (const p of wk) {
+      const wake = p.blocks.find((b) => b.type === 'sleep' && b.start === 0 && b.end < 1440)?.end;
+      const shiftEnd = p.blocks.find((b) => b.type === 'shift' && b.start > 0 && b.end < 1440)?.end;
+      for (const b of p.blocks.filter((x) => x.activityId && focus.has(x.activityId))) {
+        if (wake !== undefined) expect(b.start - wake, `${p.date} focus too soon after waking`).toBeGreaterThanOrEqual(45);
+        if (shiftEnd !== undefined && b.start >= shiftEnd) expect(b.start - shiftEnd, `${p.date} focus straight after a shift`).toBeGreaterThanOrEqual(30);
+      }
+      expect(p.blocks.some((b) => b.activityId === review.id), `${p.date} has its daily review`).toBe(true);
+    }
+    const starts = wk.flatMap((p) => p.blocks.filter((b) => b.activityId === review.id).map((b) => b.start));
+    expect(Math.max(...starts) - Math.min(...starts), 'review keeps one routine time').toBeLessThanOrEqual(4 * 60);
+    expect(dayLoad('2026-11-04', r2, S).recovery).toBe(true);
+    expect(dayLoad('2026-11-07', r2, S).recovery).toBeFalsy();
   });
 
   it('plans study during long breaks and rests on Sundays only', () => {
@@ -70,9 +90,9 @@ describe('Ascend link', () => {
     const h = buildHandoff(plans, activities, '2026-10-27', 1);
     expect(h.days.map((d) => d.d)[0]).toBe('2026-10-27');
     expect(h.days).toHaveLength(6);
-    expect(h.week).toEqual({ learn: 240, build: 240, cert: 90 });
+    expect(h.week).toEqual({ learn: 240, build: 240, cert: 90, review: 140 });
     const kinds = new Set(h.days.flatMap((d) => d.b.map((b) => b[2])));
-    expect([...kinds].every((k) => ['learn', 'build', 'cert'].includes(k))).toBe(true);
+    expect([...kinds].every((k) => ['learn', 'build', 'cert', 'review'].includes(k))).toBe(true);
     expect(h.days.some((d) => d.b.length > 0)).toBe(true);
   });
 

@@ -550,6 +550,10 @@ input:not([type='checkbox']):not([type='radio']):not([type='range']):focus, sele
 .ascend-card h3 { display: flex; align-items: center; gap: 8px; }
 .dl-lesson { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
 .dl-lesson b { color: var(--ink); font-weight: 600; }
+.growth { align-items: stretch; }
+.growth-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 12px; border-left: 4px solid var(--line); background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
+.growth-up { border-left-color: var(--good); }
+.growth-down { border-left-color: var(--warn); }
 .ascend-progress { display: flex; flex-direction: column; gap: 6px; }
 .ascend-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 520px) { .ascend-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

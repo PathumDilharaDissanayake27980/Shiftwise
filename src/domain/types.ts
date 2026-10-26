@@ -78,7 +78,7 @@ export const TIME_PREFS = ['morning', 'afternoon', 'evening', 'any'] as const;
 export type TimePref = (typeof TIME_PREFS)[number];
 
 /** Which part of the Ascend study plan an activity's blocks feed (see domain/ascend.ts). */
-export const ASCEND_LINKS = ['learn', 'build', 'cert'] as const;
+export const ASCEND_LINKS = ['learn', 'build', 'cert', 'review'] as const;
 export type AscendLink = (typeof ASCEND_LINKS)[number];
 
 export const ACTIVITY_COLORS = ['teal', 'blue', 'violet', 'coral', 'amber', 'green', 'rose', 'slate'] as const;

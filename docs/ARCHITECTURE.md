@@ -19,17 +19,24 @@ domain/   pure functions: planner · schedule · fatigue · analytics · assista
 `planDays(dates, roster, settings, activities)` plans consecutive days in two passes per day.
 
 1. **Fixed pass** (`buildFixed`): carried-over night shift and post-shift sleep, or the normal night's sleep → morning routine → commute → shift → commute home → graveyard breakfast and recovery sleep → tonight's wind-down and sleep (bedtime depends on *tomorrow's* shift) → fixed activity slots → lunch and dinner if a free window exists → changeover warnings.
-2. **Allocation pass** (`allocate`): walks the free gaps in time order and, for each position, picks the activity with the best score:
+2. **Allocation pass** (`allocate`): places goal blocks where they fit best, not just first. Every start time on a 15-minute grid is scored:
 
-   `priority × (0.4 + remaining/target) × time-of-day fit × first-block bonus × repeat penalty`
+   `priority × (0.4 + remaining/target) × time fit × routine × repeat penalty`
 
-   Focus and fitness work stop at the "no heavy work after" time. Fitness is limited to once a day. On short sleep (under 6 hours) the day gets one focus block and no workout. What is left becomes free time.
+   - **Time fit** uses `alertness(minute, fixed blocks)`, a transparent shift-work heuristic. It drops in the first 45 minutes after waking (sleep inertia), peaks 1–5 hours after waking, drops in the hour after a shift, in the 13:30–15:30 dip, in the 2 hours before sleep and after 13 hours awake. Focus work uses alertness squared; fitness prefers moderate alertness; light and personal time doesn't mind.
+   - **Routine:** the first start time of each activity on each kind of day (for example "Learn on Day shifts") becomes its anchor. Later days score 1.25× within 30 minutes of the anchor, so the same things happen at the same times and become habits.
+   - Activities keep 15 minutes from each other. Focus and fitness end by "no heavy work after". Fitness is once a day, at most twice per activity. On under 6 hours of sleep there's one focus block and no workout.
+   - The best candidate is placed, then the next, until budgets run out. Gaps of 30 minutes or less between blocks become breaks; the rest is free time.
 
-Weekly targets are shared across the 7 days, and three limits keep the week balanced (`dayLoad`, `allocate`):
+Three limits keep the week balanced (`dayLoad`, `allocate`):
 
-- **Focus budget** per kind of day (`settings.focusBudget`: Morning, Day, Night, Graveyard, Off). Leave and holidays count as Off.
-- **Pacing.** Each goal's share today is `remaining × today's budget ÷ budget left this week` (×1.3 slack, at least one block). The week fills evenly instead of piling onto the first free evenings.
+- **Focus budget** per kind of day (`settings.focusBudget`). Leave and holidays count as Off. The first day off after night shifts is a **recovery day** with at most 90 minutes of focus work.
+- **Pacing.** Each goal's share today is `remaining × today's budget ÷ budget left this week` (×1.3 slack, at least one block).
 - **Free-time floor.** At most `MAX_PLANNED_SHARE` (60%) of a day's open time is planned. The second day off in a row is a recharge day with no focus work (`settings.restDay`).
+
+**Daily review.** The balanced week includes 20 minutes of spaced recall every day (kind `light`, linked to Ascend as `review`), so it fits even on Graveyard and recharge days. Ascend fills it with a lesson you finished 1, 3, 7, 14 or 30 days ago.
+
+**Weekly growth check** (`domain/growth.ts`, on the Activities screen) compares last week's logged minutes with planned minutes. At 90% or more it suggests a goal 15% higher (15–60 minutes); under 50% it suggests 20% lower. Nothing changes until you tap Apply.
 
 ## Ascend link
 

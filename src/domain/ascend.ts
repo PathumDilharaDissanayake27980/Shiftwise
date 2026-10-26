@@ -91,8 +91,9 @@ export function lessonIn(report: Pick<Report, 'up'> | null | undefined, date: IS
 
 /** Guesses the Ascend part from an activity's name, for activities made before links existed. */
 export function inferLink(a: Activity): AscendLink | null {
-  if (a.kind !== 'focus') return null;
   const n = a.name.toLowerCase();
+  if (a.kind === 'light' && /review|flashcard|anki|recall|revis/.test(n)) return 'review';
+  if (a.kind !== 'focus') return null;
   if (/cert|exam|aws|azure|comptia|security\+|gh-?\d/.test(n)) return 'cert';
   if (/project|portfolio|build|side ?hustle|\bapps?\b/.test(n)) return 'build';
   if (/stud|learn|course|lesson|roadmap|ascend|tutorial|class/.test(n)) return 'learn';
@@ -116,7 +117,7 @@ export function ascendLinks(activities: Activity[]): Map<string, AscendLink> {
 
 export function buildHandoff(plans: DayPlan[], activities: Activity[], from: ISODate, now: number, ctx?: HandoffContext): Handoff {
   const linkOf = ascendLinks(activities);
-  const week: Record<AscendLink, number> = { learn: 0, build: 0, cert: 0 };
+  const week: Record<AscendLink, number> = { learn: 0, build: 0, cert: 0, review: 0 };
   for (const a of activities) {
     const k = linkOf.get(a.id);
     if (a.active && k) week[k] += a.weeklyTargetMin;

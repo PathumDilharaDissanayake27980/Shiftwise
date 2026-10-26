@@ -10,7 +10,7 @@ import { Icon, useToast } from './components/common';
 import { useAppData } from './data';
 import { errorMessage } from './util';
 
-export const LINK_LABEL: Record<AscendLink, string> = { learn: 'Lessons', build: 'Project', cert: 'Exam prep' };
+export const LINK_LABEL: Record<AscendLink, string> = { learn: 'Lessons', build: 'Project', cert: 'Exam prep', review: 'Review' };
 
 function isAndroid(): boolean {
   return /Android/i.test(navigator.userAgent);

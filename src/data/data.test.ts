@@ -107,13 +107,13 @@ describe('repo', () => {
     await repo.saveActivity({ ...study!, name: 'Old study', link: undefined } as never);
     await repo.saveActivity({ ...study!, id: undefined, name: 'Gym', weeklyTargetMin: 600, fixed: [{ weekday: 2, start: 1080, end: 1140 }] } as never);
     const r = await repo.applyBalancedPlan();
-    expect(r).toEqual({ added: 6, updated: 1, paused: 1 });
+    expect(r).toEqual({ added: 7, updated: 1, paused: 1 });
     const all = await repo.listActivities();
     expect(all.find((a) => a.name === 'Old study')?.active).toBe(false);
     const gym = all.find((a) => a.name === 'Gym');
     expect(gym?.weeklyTargetMin).toBe(180);
     expect(gym?.fixed).toHaveLength(1);
-    expect(all.filter((a) => a.link)).toHaveLength(3);
+    expect(all.filter((a) => a.link)).toHaveLength(4);
   });
 
   it('imports Ascend sessions once', async () => {

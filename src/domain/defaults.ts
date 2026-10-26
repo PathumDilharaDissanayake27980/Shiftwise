@@ -72,11 +72,12 @@ export function newId(): string {
 export function balancedActivities(now = Date.now()): Activity[] {
   const base = { active: true, fixed: [], createdAt: now };
   return [
-    { ...base, id: newId(), name: 'Learn (Ascend lessons)', kind: 'focus', color: 'teal', weeklyTargetMin: 4 * 60, minBlockMin: 45, maxBlockMin: 90, preferred: 'morning', priority: 5, link: 'learn' },
+    { ...base, id: newId(), name: 'Learn (Ascend lessons)', kind: 'focus', color: 'teal', weeklyTargetMin: 4 * 60, minBlockMin: 45, maxBlockMin: 75, preferred: 'any', priority: 5, link: 'learn' },
     { ...base, id: newId(), name: 'Build portfolio project', kind: 'focus', color: 'violet', weeklyTargetMin: 4 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 4, link: 'build' },
     { ...base, id: newId(), name: 'Certification prep', kind: 'focus', color: 'blue', weeklyTargetMin: 90, minBlockMin: 45, maxBlockMin: 60, preferred: 'afternoon', priority: 4, link: 'cert' },
     { ...base, id: newId(), name: 'Freelance work', kind: 'focus', color: 'amber', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 3 },
     { ...base, id: newId(), name: 'Gym', kind: 'fitness', color: 'coral', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 60, preferred: 'afternoon', priority: 4 },
+    { ...base, id: newId(), name: 'Daily review (spaced recall)', kind: 'light', color: 'slate', weeklyTargetMin: 7 * 20, minBlockMin: 20, maxBlockMin: 20, preferred: 'evening', priority: 4, link: 'review' },
     { ...base, id: newId(), name: 'Reading', kind: 'light', color: 'green', weeklyTargetMin: 90, minBlockMin: 30, maxBlockMin: 45, preferred: 'evening', priority: 2 },
     { ...base, id: newId(), name: 'Family & friends', kind: 'personal', color: 'rose', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'evening', priority: 3 },
   ];

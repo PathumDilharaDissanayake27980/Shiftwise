@@ -89,6 +89,7 @@ const LINK_ALIASES: Record<AscendLink, RegExp> = {
   learn: /^(study|studying|learn|learning|lessons?|ascend|course)$/,
   build: /^(build|building|project|projects|portfolio|coding)$/,
   cert: /^(cert|certs|certification|exam|exam prep)$/,
+  review: /^(review|revision|flashcards|recall|anki)$/,
 };
 
 function inferKind(name: string): ActivityKind {

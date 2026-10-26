@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { fmtTime } from '../../domain/time';
+import { growthSuggestions } from '../../domain/growth';
+import { addDays, fmtDuration, fmtTime } from '../../domain/time';
 import { ACTIVITY_COLORS, ACTIVITY_KINDS, ASCEND_LINKS, TIME_PREFS, type Activity, type ActivityKind, type AscendLink, type FixedSlot, type TimePref } from '../../domain/types';
 import { repo } from '../../data/repo';
 import { Empty, Icon, Meter, Section, useToast } from '../components/common';
@@ -22,6 +23,18 @@ export function ActivitiesScreen() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmBalanced, setConfirmBalanced] = useState(false);
   const stats = week(currentWeek).report.activities;
+  const growth = growthSuggestions(week(addDays(currentWeek, -7)).report.activities);
+  const [applied, setApplied] = useState<string[]>([]);
+
+  const applyGrowth = async (a: Activity, to: number) => {
+    try {
+      await repo.saveActivity({ ...a, weeklyTargetMin: to });
+      setApplied((x) => [...x, a.id]);
+      toast(`${a.name}: ${fmtDuration(to)} a week from now on.`);
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    }
+  };
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -80,6 +93,28 @@ export function ActivitiesScreen() {
         </span>
       </header>
       <p className="lede">The planner spreads each weekly goal across the free stretches your shifts leave, within each day's focus budget, and always keeps part of every day free. Fixed slots, like a class, are placed before anything else.</p>
+
+      {growth.some((g) => !applied.includes(g.activity.id)) ? (
+        <div className="card growth">
+          <h3>Weekly growth check</h3>
+          <p className="muted">Based on what you logged last week (Ascend sessions count automatically).</p>
+          {growth
+            .filter((g) => !applied.includes(g.activity.id))
+            .map((g) => (
+              <div key={g.activity.id} className={cx('growth-row', `growth-${g.kind}`)}>
+                <div>
+                  <b>
+                    {g.kind === 'up' ? '▲' : '▼'} {g.activity.name}: {fmtDuration(g.from)} → {fmtDuration(g.to)}
+                  </b>
+                  <p className="hint">{g.reason}</p>
+                </div>
+                <button type="button" className={cx('btn btn-small', g.kind === 'up' && 'btn-primary')} onClick={() => applyGrowth(g.activity, g.to)}>
+                  Apply
+                </button>
+              </div>
+            ))}
+        </div>
+      ) : null}
 
       {confirmBalanced ? (
         <div className="card">
