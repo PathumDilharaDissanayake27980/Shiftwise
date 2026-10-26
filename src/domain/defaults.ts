@@ -21,8 +21,10 @@ export const DEFAULT_SETTINGS: Settings = {
   graveyardPreSleepMin: 420,
   graveyardRecoveryUntil: 13 * 60,
   preNightNap: true,
-  focusBudget: { M: 120, D: 105, N: 150, G: 0, OFF: 270 },
+  focusBudget: { M: 150, D: 120, N: 240, G: 45, OFF: 360 },
   restDay: true,
+  maxPlannedShare: 0.65,
+  growthLevel: 'focused',
   weekStartsOn: 1,
   hour12: true,
 };
@@ -65,22 +67,63 @@ export function newId(): string {
 }
 
 /**
- * A balanced week around rotating shifts: about 10 hours of career growth (learning, portfolio
- * building, certification prep, in the 30/70 learn-build ratio of the career guide), some paid side
- * work, exercise, reading and protected time with people. Everything else stays free time.
+ * How hard to push career growth. Each level sets the weekly goals and the daily focus budgets together,
+ * and every level keeps sleep, exercise, people, a daily review and the recharge day.
  */
-export function balancedActivities(now = Date.now()): Activity[] {
+export const GROWTH_LEVELS = ['balanced', 'focused', 'sprint'] as const;
+export type GrowthLevel = (typeof GROWTH_LEVELS)[number];
+
+interface LevelSpec {
+  label: string;
+  summary: string;
+  /** Weekly minutes: lessons, project, exam prep, freelance, gym, reading, people. */
+  learn: number;
+  build: number;
+  cert: number;
+  freelance: number;
+  gym: number;
+  reading: number;
+  people: number;
+  focusBudget: Settings['focusBudget'];
+  share: number;
+}
+
+export const LEVELS: Record<GrowthLevel, LevelSpec> = {
+  balanced: {
+    label: 'Balanced', summary: 'The lighter option, for busy or heavy-roster weeks.',
+    learn: 4 * 60, build: 4 * 60, cert: 90, freelance: 3 * 60, gym: 3 * 60, reading: 90, people: 3 * 60,
+    focusBudget: { M: 120, D: 105, N: 150, G: 0, OFF: 270 },
+    share: 0.6,
+  },
+  focused: {
+    label: 'Focused', summary: 'Almost twice the lessons of Balanced, with sleep, gym and people intact.',
+    learn: 7 * 60, build: 4 * 60, cert: 2 * 60, freelance: 2 * 60, gym: 3 * 60, reading: 60, people: 3 * 60,
+    focusBudget: { M: 150, D: 120, N: 240, G: 45, OFF: 360 },
+    share: 0.65,
+  },
+  sprint: {
+    label: 'Sprint', summary: 'For an exam or a stage push. Use it for 2–4 weeks at a time.',
+    learn: 10 * 60, build: 5 * 60, cert: 3 * 60, freelance: 0, gym: 150, reading: 0, people: 2 * 60,
+    focusBudget: { M: 180, D: 135, N: 270, G: 60, OFF: 420 },
+    share: 0.75,
+  },
+};
+
+/** The weekly activities for a growth level. Activities a level does not use come back paused. */
+export function balancedActivities(now = Date.now(), level: GrowthLevel = 'focused'): Activity[] {
+  const L = LEVELS[level];
   const base = { active: true, fixed: [], createdAt: now };
-  return [
-    { ...base, id: newId(), name: 'Learn (Ascend lessons)', kind: 'focus', color: 'teal', weeklyTargetMin: 4 * 60, minBlockMin: 45, maxBlockMin: 75, preferred: 'any', priority: 5, link: 'learn' },
-    { ...base, id: newId(), name: 'Build portfolio project', kind: 'focus', color: 'violet', weeklyTargetMin: 4 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 4, link: 'build' },
-    { ...base, id: newId(), name: 'Certification prep', kind: 'focus', color: 'blue', weeklyTargetMin: 90, minBlockMin: 45, maxBlockMin: 60, preferred: 'afternoon', priority: 4, link: 'cert' },
-    { ...base, id: newId(), name: 'Freelance work', kind: 'focus', color: 'amber', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 3 },
-    { ...base, id: newId(), name: 'Gym', kind: 'fitness', color: 'coral', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 60, preferred: 'afternoon', priority: 4 },
+  const list: Activity[] = [
+    { ...base, id: newId(), name: 'Learn (Ascend lessons)', kind: 'focus', color: 'teal', weeklyTargetMin: L.learn, minBlockMin: 45, maxBlockMin: 90, preferred: 'any', priority: 5, link: 'learn' },
+    { ...base, id: newId(), name: 'Build portfolio project', kind: 'focus', color: 'violet', weeklyTargetMin: L.build, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 4, link: 'build' },
+    { ...base, id: newId(), name: 'Certification prep', kind: 'focus', color: 'blue', weeklyTargetMin: L.cert, minBlockMin: 45, maxBlockMin: 60, preferred: 'afternoon', priority: 4, link: 'cert' },
+    { ...base, id: newId(), name: 'Freelance work', kind: 'focus', color: 'amber', weeklyTargetMin: L.freelance, minBlockMin: 60, maxBlockMin: 120, preferred: 'any', priority: 3 },
+    { ...base, id: newId(), name: 'Gym', kind: 'fitness', color: 'coral', weeklyTargetMin: L.gym, minBlockMin: 50, maxBlockMin: 60, preferred: 'afternoon', priority: 4 },
     { ...base, id: newId(), name: 'Daily review (spaced recall)', kind: 'light', color: 'slate', weeklyTargetMin: 7 * 20, minBlockMin: 20, maxBlockMin: 20, preferred: 'evening', priority: 4, link: 'review' },
-    { ...base, id: newId(), name: 'Reading', kind: 'light', color: 'green', weeklyTargetMin: 90, minBlockMin: 30, maxBlockMin: 45, preferred: 'evening', priority: 2 },
-    { ...base, id: newId(), name: 'Family & friends', kind: 'personal', color: 'rose', weeklyTargetMin: 3 * 60, minBlockMin: 60, maxBlockMin: 120, preferred: 'evening', priority: 3 },
+    { ...base, id: newId(), name: 'Reading', kind: 'light', color: 'green', weeklyTargetMin: L.reading, minBlockMin: 30, maxBlockMin: 45, preferred: 'evening', priority: 2 },
+    { ...base, id: newId(), name: 'Family & friends', kind: 'personal', color: 'rose', weeklyTargetMin: L.people, minBlockMin: 60, maxBlockMin: 120, preferred: 'evening', priority: 3 },
   ];
+  return list.map((a) => (a.weeklyTargetMin > 0 ? a : { ...a, active: false }));
 }
 
 /** Starter activities for a new install. */

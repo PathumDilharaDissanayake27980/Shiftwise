@@ -3,7 +3,7 @@ import { balancedActivities } from './defaults';
 import { growthSuggestions } from './growth';
 
 describe('weekly growth check', () => {
-  const [learn, build, cert] = balancedActivities(0);
+  const [learn, build, cert] = balancedActivities(0, 'balanced');
   const stat = (a: typeof learn, planned: number, logged: number) => ({ activity: a!, targetMin: a!.weeklyTargetMin, plannedMin: planned, loggedMin: logged });
 
   it('levels up goals you hit and steps down goals you miss', () => {
@@ -17,5 +17,10 @@ describe('weekly growth check', () => {
 
   it('says nothing about a week with too little planned to judge', () => {
     expect(growthSuggestions([stat(learn, 45, 0)])).toEqual([]);
+  });
+
+  it('never judges a week with nothing logged, or activities newer than that week', () => {
+    expect(growthSuggestions([stat(learn, 240, 0), stat(build, 240, 0)])).toEqual([]);
+    expect(growthSuggestions([stat(learn, 240, 235), stat(build, 240, 0)], -1)).toEqual([]);
   });
 });

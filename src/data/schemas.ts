@@ -86,6 +86,8 @@ export const settingsSchema = z.object({
     .object({ M: budgetMin, D: budgetMin, N: budgetMin, G: budgetMin, OFF: budgetMin })
     .default(DEFAULT_SETTINGS.focusBudget),
   restDay: z.boolean().default(DEFAULT_SETTINGS.restDay),
+  maxPlannedShare: z.number().min(0.5).max(0.8).default(DEFAULT_SETTINGS.maxPlannedShare),
+  growthLevel: z.enum(['balanced', 'focused', 'sprint']).default(DEFAULT_SETTINGS.growthLevel),
   weekStartsOn: z.union([z.literal(0), z.literal(1)]),
   hour12: z.boolean(),
 });

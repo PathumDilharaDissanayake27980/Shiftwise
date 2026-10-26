@@ -67,6 +67,10 @@ export interface Settings {
   focusBudget: { M: number; D: number; N: number; G: number; OFF: number };
   /** The second of two days off in a row is a recharge day: fitness, light and personal time only. */
   restDay: boolean;
+  /** Most of a day's open time that may be planned (0.5–0.8). The rest always stays free. */
+  maxPlannedShare: number;
+  /** The learning intensity last chosen (sets goals, budgets and the share above). */
+  growthLevel: 'balanced' | 'focused' | 'sprint';
   weekStartsOn: 0 | 1;
   hour12: boolean;
 }

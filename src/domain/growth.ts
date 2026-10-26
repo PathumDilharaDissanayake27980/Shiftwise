@@ -19,11 +19,16 @@ export interface GrowthSuggestion {
 
 const round15 = (m: number) => Math.round(m / 15) * 15;
 
-export function growthSuggestions(lastWeek: ActivityStat[]): GrowthSuggestion[] {
+/**
+ * @param weekStartMs start of the week being judged. Activities created after it are skipped, and a
+ * week with nothing logged at all is not judged: no data is not the same as failing.
+ */
+export function growthSuggestions(lastWeek: ActivityStat[], weekStartMs = 0): GrowthSuggestion[] {
   const out: GrowthSuggestion[] = [];
+  if (lastWeek.reduce((t, st) => t + st.loggedMin, 0) < 30) return out;
   for (const st of lastWeek) {
     const a = st.activity;
-    if (!a.active || st.targetMin <= 0 || st.plannedMin < 60) continue;
+    if (!a.active || st.targetMin <= 0 || st.plannedMin < 60 || a.createdAt > weekStartMs) continue;
     const rate = st.loggedMin / st.plannedMin;
     const pct = Math.round(rate * 100);
     if (rate < 0.5) {

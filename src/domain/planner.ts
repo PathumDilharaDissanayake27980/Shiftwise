@@ -228,7 +228,7 @@ export function dayLoad(date: ISODate, roster: RosterLookup, s: Settings): Pick<
   const rest = s.restDay && (run > 14 ? weekday(date) === 0 : run % 2 === 0);
   const prev = roster(addDays(date, -1)).code;
   // A night shift runs into this morning; a graveyard shift ended yesterday morning and a full night's sleep followed.
-  if (!rest && prev === 'N') return { focus: Math.min(s.focusBudget.OFF, 90), rest: false, recovery: true };
+  if (!rest && prev === 'N') return { focus: Math.round(s.focusBudget.OFF / 3 / 15) * 15, rest: false, recovery: true };
   return { focus: rest ? 0 : s.focusBudget.OFF, rest };
 }
 
@@ -273,7 +273,8 @@ function timeFit(a: Activity, start: number, end: number, fixed: PlanBlock[]): n
  * Places goal blocks where they fit best, not just first. Every possible start (15-minute grid) is
  * scored by priority, what is left of the weekly goal, how alert you will be, and routine: the same
  * activity at the same time on the same kind of day scores higher, so habits form. Best goes first,
- * then the next, until the day's budgets are used. Whatever is left becomes free time.
+ * then the next, until the day's budgets are used: deep work first, then exercise, then light and
+ * personal time around them. Whatever is left becomes free time.
  */
 export function allocate(
   fixed: PlanBlock[],
@@ -297,7 +298,7 @@ export function allocate(
   }
   let focusLeft = load.focus;
   const openMin = gapsOf(fixed).reduce((t, g) => t + g.end - g.start, 0);
-  let plannedLeft = Math.floor((openMin * MAX_PLANNED_SHARE) / 15) * 15;
+  let plannedLeft = Math.floor((openMin * (s.maxPlannedShare ?? MAX_PLANNED_SHARE)) / 15) * 15;
   const todayCap = new Map<string, number>();
   for (const a of activities) {
     const remaining = a.weeklyTargetMin - (state.progress.get(a.id) ?? 0);
@@ -315,29 +316,43 @@ export function allocate(
   // Activities keep 15 minutes from each other, so there is always a breather between them.
   const clear = (st: number, en: number) => placed.every((b) => en + 15 <= b.start || st >= b.end + 15);
 
-  for (let guard = 0; guard < 24; guard++) {
+  // Hardest to place goes first: deep work needs your alert hours, exercise needs daytime, while a short
+  // review or time with people fits almost anywhere. Without this, easy things took the best slots.
+  const habit = (a: Activity) => a.maxBlockMin <= 30;
+  const phases: ((a: Activity) => boolean)[] = [(a) => a.kind === 'focus', (a) => a.kind === 'fitness', (a) => habit(a) && a.kind !== 'focus' && a.kind !== 'fitness', (a) => !habit(a) && (a.kind === 'light' || a.kind === 'personal')];
+  // ...but keep room for short daily habits (the 20-minute review) so deep work cannot crowd them out.
+  const habitReserve = activities
+    .filter((a) => a.active && habit(a) && a.weeklyTargetMin - (state.progress.get(a.id) ?? 0) >= a.minBlockMin)
+    .reduce((t, a) => t + a.maxBlockMin + 15, 0);
+  for (let guard = 0, phase = 0; guard < 40 && phase < phases.length; guard++) {
     const gaps = gapsOf([...fixed, ...placed]);
     let best: { a: Activity; st: number; len: number; score: number } | null = null;
     for (const a of activities) {
+      if (!(phases[phase] as (a: Activity) => boolean)(a)) continue;
       if (!a.active || a.weeklyTargetMin <= 0) continue;
       const remaining = a.weeklyTargetMin - (state.progress.get(a.id) ?? 0);
       if (remaining < Math.min(30, a.minBlockMin)) continue;
-      if ((perDay.get(a.id) ?? 0) >= 2) continue;
+      // short daily habits (a 20-minute review) happen once a day; bigger goals at most twice
+      if ((perDay.get(a.id) ?? 0) >= (a.maxBlockMin <= 30 ? 1 : 2)) continue;
       const capLeft = (todayCap.get(a.id) ?? 0) - (perDayMin.get(a.id) ?? 0);
       if (capLeft < 15) continue;
       const heavy = a.kind === 'focus' || a.kind === 'fitness';
       if (a.kind === 'focus' && (load.rest || focusLeft < 15 || (tired && focusBlocks >= 1))) continue;
       if (day.code === 'SICK' && heavy) continue;
       if (a.kind === 'fitness' && (fitnessDone || tired)) continue;
-      let len = Math.min(a.maxBlockMin, remaining, capLeft, plannedLeft, a.kind === 'focus' ? focusLeft : Infinity);
+      const room = a.maxBlockMin <= 30 ? plannedLeft : plannedLeft - (phase < 2 ? habitReserve : 0);
+      let len = Math.min(a.maxBlockMin, remaining, capLeft, room, a.kind === 'focus' ? focusLeft : Infinity);
       len = Math.floor(len / 5) * 5;
-      const need = Math.min(a.minBlockMin, remaining, plannedLeft, a.kind === 'focus' ? focusLeft : Infinity);
-      const minLen = Math.max(a.minBlockMin < 30 ? 15 : 30, need);
+      const need = Math.min(a.minBlockMin, remaining, room, a.kind === 'focus' ? focusLeft : Infinity);
+      // never shrink a block below its useful minimum just to use up a budget: no 30-minute project scraps
+      const minLen = Math.max(a.minBlockMin < 30 ? 15 : 30, need, Math.min(a.minBlockMin, remaining));
       if (len < minLen) continue;
       const anchor = state.anchors.get(`${a.id}|${day.code}`);
       const base = a.priority * (0.4 + remaining / a.weeklyTargetMin) * ((perDay.get(a.id) ?? 0) > 0 ? 0.5 : 1);
       for (const g of gaps) {
-        const hi = heavy ? Math.min(g.end, s.lateCutoff) : g.end;
+        // exercise ends at least two hours before sleep, so it does not keep you awake
+        const sleepAfter = Math.min(MIN_PER_DAY, ...fixed.filter((b) => b.type === 'sleep' && b.start >= g.start).map((b) => b.start));
+        const hi = a.kind === 'fitness' ? Math.min(g.end, s.lateCutoff, sleepAfter - 120) : heavy ? Math.min(g.end, s.lateCutoff) : g.end;
         const lo = a.kind === 'fitness' ? Math.max(g.start, 6 * 60) : g.start;
         for (let st = Math.ceil(lo / 15) * 15; st + minLen <= hi; st += 15) {
           const l = Math.min(len, Math.floor((hi - st) / 5) * 5);
@@ -348,7 +363,10 @@ export function allocate(
         }
       }
     }
-    if (!best) break;
+    if (!best) {
+      phase += 1;
+      continue;
+    }
     const { a, st, len } = best;
     placed.push({ start: st, end: st + len, type: 'activity', label: a.name, activityId: a.id });
     state.progress.set(a.id, (state.progress.get(a.id) ?? 0) + len);

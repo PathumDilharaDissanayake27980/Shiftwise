@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { growthSuggestions } from '../../domain/growth';
-import { addDays, fmtDuration, fmtTime } from '../../domain/time';
+import { GROWTH_LEVELS, LEVELS, type GrowthLevel } from '../../domain/defaults';
+import { addDays, atMinutes, fmtDuration, fmtTime } from '../../domain/time';
 import { ACTIVITY_COLORS, ACTIVITY_KINDS, ASCEND_LINKS, TIME_PREFS, type Activity, type ActivityKind, type AscendLink, type FixedSlot, type TimePref } from '../../domain/types';
 import { repo } from '../../data/repo';
 import { Empty, Icon, Meter, Section, useToast } from '../components/common';
@@ -21,9 +22,9 @@ export function ActivitiesScreen() {
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [confirmBalanced, setConfirmBalanced] = useState(false);
+  const [pickLevel, setPickLevel] = useState<GrowthLevel | null>(null);
   const stats = week(currentWeek).report.activities;
-  const growth = growthSuggestions(week(addDays(currentWeek, -7)).report.activities);
+  const growth = growthSuggestions(week(addDays(currentWeek, -7)).report.activities, atMinutes(addDays(currentWeek, -7), 0));
   const [applied, setApplied] = useState<string[]>([]);
 
   const applyGrowth = async (a: Activity, to: number) => {
@@ -57,11 +58,11 @@ export function ActivitiesScreen() {
     }
   };
 
-  const balanced = async () => {
+  const chooseLevel = async (level: GrowthLevel) => {
     try {
-      const r = await repo.applyBalancedPlan();
-      toast(`Balanced week on: ${r.added} added, ${r.updated} updated${r.paused ? `, ${r.paused} paused (not deleted)` : ''}.`);
-      setConfirmBalanced(false);
+      const r = await repo.applyBalancedPlan(Date.now(), level);
+      toast(`${LEVELS[level].label} week on: ${r.added} added, ${r.updated} updated${r.paused ? `, ${r.paused} paused (not deleted)` : ''}. Ascend updates by itself.`);
+      setPickLevel(null);
     } catch (err) {
       toast(errorMessage(err), 'error');
     }
@@ -84,15 +85,46 @@ export function ActivitiesScreen() {
           <h1>Activities & weekly goals</h1>
         </div>
         <span className="row">
-          <button type="button" className="btn" onClick={() => setConfirmBalanced((v) => !v)}>
-            Balanced week
-          </button>
           <button type="button" className="btn btn-primary" onClick={() => setDraft(blank())}>
             <Icon name="plus" size={16} /> Add activity
           </button>
         </span>
       </header>
       <p className="lede">The planner spreads each weekly goal across the free stretches your shifts leave, within each day's focus budget, and always keeps part of every day free. Fixed slots, like a class, are placed before anything else.</p>
+
+
+      <div className="card levels">
+        <h3>Learning intensity</h3>
+        <p className="muted">Sets your weekly goals and how much focus work each kind of shift day can carry. Every level keeps sleep, exercise, people, a daily review and a recharge day.</p>
+        <div className="level-grid">
+          {GROWTH_LEVELS.map((lv) => {
+            const L = LEVELS[lv];
+            const growth = L.learn + L.build + L.cert + 140;
+            return (
+              <button key={lv} type="button" className={cx('level', settings.growthLevel === lv && 'is-on', pickLevel === lv && 'is-picked')} onClick={() => setPickLevel(lv)}>
+                <b>{L.label}</b>
+                <span className="level-h">{Math.round(growth / 60)}h / week</span>
+                <span className="hint">
+                  {fmtDuration(L.learn)} lessons · {fmtDuration(L.build)} project · {fmtDuration(L.cert)} exam prep · daily review
+                </span>
+                <span className="hint">{L.summary}</span>
+                {settings.growthLevel === lv ? <em className="tag tag-now">current</em> : null}
+              </button>
+            );
+          })}
+        </div>
+        {pickLevel ? (
+          <div className="row">
+            <button type="button" className="btn btn-primary" onClick={() => chooseLevel(pickLevel)}>
+              Use {LEVELS[pickLevel].label}
+            </button>
+            <button type="button" className="btn" onClick={() => setPickLevel(null)}>
+              Cancel
+            </button>
+            <span className="hint">Activities with the same names are updated; others are paused, never deleted.</span>
+          </div>
+        ) : null}
+      </div>
 
       {growth.some((g) => !applied.includes(g.activity.id)) ? (
         <div className="card growth">
@@ -113,23 +145,6 @@ export function ActivitiesScreen() {
                 </button>
               </div>
             ))}
-        </div>
-      ) : null}
-
-      {confirmBalanced ? (
-        <div className="card">
-          <h3>Switch to the balanced week?</h3>
-          <p className="muted">
-            About 10 hours of career growth (4h lessons, 4h portfolio project, 1.5h exam prep, all sent to Ascend), 3h freelance, 3 gym sessions, 1.5h reading and 3h with family and friends. Activities with the same names are updated; any others are paused, not deleted.
-          </p>
-          <div className="row">
-            <button type="button" className="btn btn-primary" onClick={balanced}>
-              Use the balanced week
-            </button>
-            <button type="button" className="btn" onClick={() => setConfirmBalanced(false)}>
-              Cancel
-            </button>
-          </div>
         </div>
       ) : null}
 

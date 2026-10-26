@@ -1,7 +1,7 @@
 import type { ZodError } from 'zod';
 import { type AlertRule, defaultAlertRules } from '../domain/alerts';
 import type { AscendProgress, Report, ReportLog } from '../domain/ascend';
-import { DEFAULT_SETTINGS, balancedActivities, defaultRosterDay, newId } from '../domain/defaults';
+import { DEFAULT_SETTINGS, LEVELS, balancedActivities, defaultRosterDay, newId, type GrowthLevel } from '../domain/defaults';
 import type { Activity, ISODate, RosterDay, Settings, TimeLog } from '../domain/types';
 import { type Backup, BACKUP_FORMAT, BACKUP_VERSION, activitySchema, ascendProgressSchema, ascendReportSchema, alertConfigSchema, alertRulesSchema, backupSchema, firstIssue, rosterDaySchema, settingsSchema, timeLogSchema } from './schemas';
 import { type PinRecord, type Sealed, hashPin, open, seal, verifyPin } from './crypto';
@@ -93,8 +93,9 @@ export class Repo {
    * Switches to the balanced week: preset activities are added (or updated in place when one with the
    * same name exists) and every other activity is paused, never deleted, so its history is kept.
    */
-  async applyBalancedPlan(now = Date.now()): Promise<{ added: number; updated: number; paused: number }> {
-    const preset = balancedActivities(now).map((a) => check(activitySchema, a) as Activity);
+  async applyBalancedPlan(now = Date.now(), level: GrowthLevel = 'focused'): Promise<{ added: number; updated: number; paused: number }> {
+    const preset = balancedActivities(now, level).map((a) => check(activitySchema, a) as Activity);
+    await this.saveSettings({ ...(await this.getSettings()), focusBudget: LEVELS[level].focusBudget, maxPlannedShare: LEVELS[level].share, growthLevel: level });
     const r = { added: 0, updated: 0, paused: 0 };
     await this.db.transaction('rw', this.db.activities, async () => {
       const existing = await this.db.activities.toArray();
@@ -114,6 +115,7 @@ export class Repo {
       }
       for (const a of existing) {
         if (keep.has(a.id) || !a.active) continue;
+        if (preset.some((p) => p.name.toLowerCase() === a.name.toLowerCase())) continue;
         await this.db.activities.put({ ...a, active: false });
         r.paused += 1;
       }

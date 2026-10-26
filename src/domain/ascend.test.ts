@@ -90,7 +90,7 @@ describe('Ascend link', () => {
     const h = buildHandoff(plans, activities, '2026-10-27', 1);
     expect(h.days.map((d) => d.d)[0]).toBe('2026-10-27');
     expect(h.days).toHaveLength(6);
-    expect(h.week).toEqual({ learn: 240, build: 240, cert: 90, review: 140 });
+    expect(h.week).toEqual({ learn: 420, build: 240, cert: 120, review: 140 });
     const kinds = new Set(h.days.flatMap((d) => d.b.map((b) => b[2])));
     expect([...kinds].every((k) => ['learn', 'build', 'cert', 'review'].includes(k))).toBe(true);
     expect(h.days.some((d) => d.b.length > 0)).toBe(true);
